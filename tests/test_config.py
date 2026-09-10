@@ -97,3 +97,22 @@ def test_queue_capacity_defaults_and_accepts_an_override() -> None:
 def test_a_nonsense_queue_capacity_falls_back_to_the_default() -> None:
     for raw in ("0", "-5", "lots", "3.5", ""):
         assert Config.from_env({"HERMES_AXIOM_QUEUE_CAPACITY": raw}).queue_capacity == 2048
+
+
+def test_redaction_defaults_to_the_most_conservative_level() -> None:
+    assert Config.from_env({}).redaction == "metadata"
+    assert Config.from_env({}).redactor().level == "metadata"
+
+
+def test_redaction_level_is_selectable() -> None:
+    assert Config.from_env({"HERMES_AXIOM_REDACTION": "full"}).redaction == "full"
+    assert Config.from_env({"HERMES_AXIOM_REDACTION": "tools"}).redaction == "tools"
+
+
+def test_an_unknown_redaction_level_does_not_widen_capture() -> None:
+    assert Config.from_env({"HERMES_AXIOM_REDACTION": "everything"}).redaction == "metadata"
+
+
+def test_max_chars_is_configurable_and_falls_back_when_nonsense() -> None:
+    assert Config.from_env({"HERMES_AXIOM_MAX_CHARS": "500"}).max_chars == 500
+    assert Config.from_env({"HERMES_AXIOM_MAX_CHARS": "-1"}).max_chars == 12000

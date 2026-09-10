@@ -11,6 +11,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 
 from .dispatch import DEFAULT_CAPACITY
+from .redaction import DEFAULT_LEVEL, DEFAULT_MAX_CHARS, Redactor
 
 ENV_PREFIX = "HERMES_AXIOM_"
 
@@ -21,6 +22,8 @@ ENV_LOGS_DATASET = ENV_PREFIX + "LOGS_DATASET"
 ENV_METRICS_DATASET = ENV_PREFIX + "METRICS_DATASET"
 ENV_SERVICE_NAME = ENV_PREFIX + "SERVICE_NAME"
 ENV_QUEUE_CAPACITY = ENV_PREFIX + "QUEUE_CAPACITY"
+ENV_REDACTION = ENV_PREFIX + "REDACTION"
+ENV_MAX_CHARS = ENV_PREFIX + "MAX_CHARS"
 ENV_DEBUG = ENV_PREFIX + "DEBUG"
 
 DEFAULT_DOMAIN = "api.axiom.co"
@@ -86,6 +89,8 @@ class Config:
     metrics_dataset: str = ""
     service_name: str = DEFAULT_SERVICE_NAME
     queue_capacity: int = DEFAULT_CAPACITY
+    redaction: str = DEFAULT_LEVEL
+    max_chars: int = DEFAULT_MAX_CHARS
     debug: bool = False
 
     @staticmethod
@@ -99,6 +104,8 @@ class Config:
                 ENV_METRICS_DATASET,
                 ENV_SERVICE_NAME,
                 ENV_QUEUE_CAPACITY,
+                ENV_REDACTION,
+                ENV_MAX_CHARS,
                 ENV_DEBUG,
             }
         )
@@ -114,6 +121,8 @@ class Config:
             metrics_dataset=_text(source, ENV_METRICS_DATASET),
             service_name=_text(source, ENV_SERVICE_NAME) or DEFAULT_SERVICE_NAME,
             queue_capacity=_positive_int(_text(source, ENV_QUEUE_CAPACITY), DEFAULT_CAPACITY),
+            redaction=Redactor.for_level(_text(source, ENV_REDACTION)).level,
+            max_chars=_positive_int(_text(source, ENV_MAX_CHARS), DEFAULT_MAX_CHARS),
             debug=_text(source, ENV_DEBUG).lower() in _TRUTHY,
         )
 
@@ -156,6 +165,10 @@ class Config:
                 f"{ENV_TRACES_DATASET}, {ENV_LOGS_DATASET}, {ENV_METRICS_DATASET}"
             )
         return tuple(found)
+
+    def redactor(self) -> Redactor:
+        """The content policy this configuration selects."""
+        return Redactor.for_level(self.redaction, self.max_chars)
 
     @property
     def active(self) -> bool:
