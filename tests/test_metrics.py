@@ -270,3 +270,11 @@ def test_a_request_with_neither_timestamps_nor_duration_records_zero(recorder_an
     recorder.post_api_request(**_api_request(started_at=None, ended_at=None, api_duration=None))
     assert dispatcher.flush(FLUSH)
     assert _points(reader)["gen_ai.client.operation.duration"][0].sum == 0.0
+
+
+def test_the_billing_route_is_a_dimension(recorder_and_reader) -> None:
+    recorder, reader, dispatcher = recorder_and_reader
+    recorder.post_api_request(**_api_request())
+    assert dispatcher.flush(FLUSH)
+    point = _points(reader)["gen_ai.client.operation.duration"][0]
+    assert point.attributes["hermes.billing_mode"] == "official_docs_snapshot"

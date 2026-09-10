@@ -14,6 +14,7 @@ from typing import Any
 
 from opentelemetry.metrics import Meter
 
+from .billing import billing_mode
 from .dispatch import Dispatcher
 from .events import Event, stamp
 
@@ -117,6 +118,11 @@ class MetricRecorder:
             "gen_ai.provider.name": _text(payload, "provider"),
             "gen_ai.request.model": _model_label(payload),
             "hermes.platform": _text(payload, "platform"),
+            "hermes.billing_mode": billing_mode(
+                _text(payload, "model", ""),
+                _text(payload, "provider", ""),
+                _text(payload, "base_url", ""),
+            ),
         }
 
     def _api_request(self, payload: Mapping[str, Any]) -> None:

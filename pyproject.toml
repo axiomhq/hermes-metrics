@@ -49,3 +49,9 @@ select = ["E", "F", "I", "B", "UP", "SIM"]
 python_version = "3.11"
 strict = true
 files = ["hermess_metrics"]
+
+# Hermes ships without type information and is present only inside a Hermes
+# install, so its modules are imported defensively and typed as Any.
+[[tool.mypy.overrides]]
+module = ["agent.*"]
+ignore_missing_imports = true

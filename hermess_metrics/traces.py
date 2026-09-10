@@ -19,6 +19,7 @@ from opentelemetry import trace as trace_api
 from opentelemetry.context import Context
 from opentelemetry.trace import Span, SpanKind, Status, StatusCode
 
+from .billing import billing_mode
 from .dispatch import Dispatcher
 from .events import Event, stamp
 from .redaction import CLASS_MESSAGES, CLASS_TOOL_IO, Redactor
@@ -198,6 +199,11 @@ class TraceRecorder:
             **self._common(payload, "chat"),
             "gen_ai.operation.name": "chat",
             "gen_ai.conversation.id": str(payload.get("session_id") or ""),
+            "hermes.billing_mode": billing_mode(
+                str(payload.get("model") or ""),
+                str(payload.get("provider") or ""),
+                str(payload.get("base_url") or ""),
+            ),
         }
         for key, source in (
             ("gen_ai.provider.name", "provider"),

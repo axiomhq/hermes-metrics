@@ -331,3 +331,10 @@ def test_structural_spans_start_when_the_hook_fired_not_when_the_worker_ran() ->
     for name in ("invoke_agent hermes", "turn"):
         lag_ms = (spans[name].start_time / 1_000_000_000) - hook_fired_at
         assert lag_ms < 0.1, f"{name} started {lag_ms:.3f}s after the hook fired"
+
+
+def test_the_billing_route_lands_on_the_chat_span(recorder_and_spans) -> None:
+    recorder, exporter, dispatcher = recorder_and_spans
+    recorder.post_api_request(**_api_request())
+    chat = _drain(dispatcher, exporter)["chat claude-opus-5"]
+    assert chat.attributes["hermes.billing_mode"] == "official_docs_snapshot"
