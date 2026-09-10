@@ -21,6 +21,9 @@ ENV_QUEUE_CAPACITY = ENV_PREFIX + "QUEUE_CAPACITY"
 ENV_REDACTION = ENV_PREFIX + "REDACTION"
 ENV_MAX_CHARS = ENV_PREFIX + "MAX_CHARS"
 ENV_CONTAINER_STATS = ENV_PREFIX + "CONTAINER_STATS"
+ENV_ORG = ENV_PREFIX + "ORG"
+ENV_CLAIM_URL = ENV_PREFIX + "CLAIM_URL"
+ENV_EXPIRES_AT = ENV_PREFIX + "EXPIRES_AT"
 ENV_DEBUG = ENV_PREFIX + "DEBUG"
 
 DEFAULT_DOMAIN = "api.axiom.co"
@@ -87,6 +90,9 @@ class Config:
     redaction: str = DEFAULT_LEVEL
     max_chars: int = DEFAULT_MAX_CHARS
     container_stats: bool = False
+    org: str = ""
+    claim_url: str = field(default="", repr=False)
+    expires_at: str = ""
     debug: bool = False
 
     @staticmethod
@@ -103,6 +109,9 @@ class Config:
                 ENV_REDACTION,
                 ENV_MAX_CHARS,
                 ENV_CONTAINER_STATS,
+                ENV_ORG,
+                ENV_CLAIM_URL,
+                ENV_EXPIRES_AT,
                 ENV_DEBUG,
             }
         )
@@ -121,6 +130,9 @@ class Config:
             redaction=Redactor.for_level(_text(source, ENV_REDACTION)).level,
             max_chars=_positive_int(_text(source, ENV_MAX_CHARS), DEFAULT_MAX_CHARS),
             container_stats=_text(source, ENV_CONTAINER_STATS).lower() in _TRUTHY,
+            org=_text(source, ENV_ORG),
+            claim_url=_text(source, ENV_CLAIM_URL),
+            expires_at=_text(source, ENV_EXPIRES_AT),
             debug=_text(source, ENV_DEBUG).lower() in _TRUTHY,
         )
 
