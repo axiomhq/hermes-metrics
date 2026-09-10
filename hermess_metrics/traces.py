@@ -43,6 +43,9 @@ logger = logging.getLogger(__name__)
 class _Event:
     kind: str
     payload: Mapping[str, Any]
+    # Stamped on the agent thread, so a queue backlog cannot delay the start of
+    # a structural span past the children it must contain.
+    observed_at: float
 
 
 def _model_label(payload: Mapping[str, Any]) -> str:
@@ -89,25 +92,28 @@ class TraceRecorder:
         return len(self._sessions)
 
     def on_session_start(self, **payload: Any) -> None:
-        self._dispatcher.submit(_Event("session_start", payload))
+        self._submit("session_start", payload)
 
     def on_session_end(self, **payload: Any) -> None:
-        self._dispatcher.submit(_Event("session_end", payload))
+        self._submit("session_end", payload)
 
     def pre_llm_call(self, **payload: Any) -> None:
-        self._dispatcher.submit(_Event("turn_start", payload))
+        self._submit("turn_start", payload)
 
     def post_llm_call(self, **payload: Any) -> None:
-        self._dispatcher.submit(_Event("turn_end", payload))
+        self._submit("turn_end", payload)
 
     def post_api_request(self, **payload: Any) -> None:
-        self._dispatcher.submit(_Event("api_request", payload))
+        self._submit("api_request", payload)
 
     def api_request_error(self, **payload: Any) -> None:
-        self._dispatcher.submit(_Event("api_error", payload))
+        self._submit("api_error", payload)
 
     def post_tool_call(self, **payload: Any) -> None:
-        self._dispatcher.submit(_Event("tool_call", payload))
+        self._submit("tool_call", payload)
+
+    def _submit(self, kind: str, payload: Mapping[str, Any]) -> None:
+        self._dispatcher.submit(_Event(kind, payload, time.time()))
 
     def handle(self, event: Any) -> None:
         if not isinstance(event, _Event):
@@ -121,7 +127,7 @@ class TraceRecorder:
             "api_error": self._api_error,
             "tool_call": self._tool_call,
         }[event.kind]
-        handler(event.payload)
+        handler(event)
 
     def _common(self, payload: Mapping[str, Any], step: str) -> dict[str, Any]:
         platform = payload.get("platform")
@@ -143,7 +149,8 @@ class TraceRecorder:
     def _parent_context(self, span: Span | None) -> Context:
         return trace_api.set_span_in_context(span) if span is not None else Context()
 
-    def _session_start(self, payload: Mapping[str, Any]) -> None:
+    def _session_start(self, event: _Event) -> None:
+        payload = event.payload
         session_id = str(payload.get("session_id") or "")
         span = self._tracer.start_span(
             f"invoke_agent {AGENT_NAME}",
@@ -155,18 +162,21 @@ class TraceRecorder:
                 "gen_ai.agent.name": AGENT_NAME,
                 "gen_ai.conversation.id": session_id,
             },
+            start_time=_nanos(event.observed_at),
         )
         self._remember(self._sessions, session_id, span)
 
-    def _session_end(self, payload: Mapping[str, Any]) -> None:
+    def _session_end(self, event: _Event) -> None:
+        payload = event.payload
         span = self._sessions.pop(str(payload.get("session_id") or ""), None)
         if span is None:
             return
         if payload.get("interrupted"):
             span.set_attribute("hermes.interrupted", True)
-        span.end()
+        span.end(end_time=_nanos(event.observed_at))
 
-    def _turn_start(self, payload: Mapping[str, Any]) -> None:
+    def _turn_start(self, event: _Event) -> None:
+        payload = event.payload
         turn_id = str(payload.get("turn_id") or "")
         parent = self._sessions.get(str(payload.get("session_id") or ""))
         span = self._tracer.start_span(
@@ -178,13 +188,15 @@ class TraceRecorder:
                 "gen_ai.conversation.id": str(payload.get("session_id") or ""),
                 "hermes.turn_id": turn_id,
             },
+            start_time=_nanos(event.observed_at),
         )
         self._remember(self._turns, turn_id, span)
 
-    def _turn_end(self, payload: Mapping[str, Any]) -> None:
+    def _turn_end(self, event: _Event) -> None:
+        payload = event.payload
         span = self._turns.pop(str(payload.get("turn_id") or ""), None)
         if span is not None:
-            span.end()
+            span.end(end_time=_nanos(event.observed_at))
 
     def _start_chat_span(self, payload: Mapping[str, Any]) -> Span:
         label = _model_label(payload)
@@ -214,7 +226,8 @@ class TraceRecorder:
             start_time=_nanos(started_at) if isinstance(started_at, (int, float)) else None,
         )
 
-    def _api_request(self, payload: Mapping[str, Any]) -> None:
+    def _api_request(self, event: _Event) -> None:
+        payload = event.payload
         span = self._start_chat_span(payload)
         finish_reason = payload.get("finish_reason")
         if isinstance(finish_reason, str) and finish_reason:
@@ -231,7 +244,8 @@ class TraceRecorder:
         ended_at = payload.get("ended_at")
         span.end(end_time=_nanos(ended_at) if isinstance(ended_at, (int, float)) else None)
 
-    def _api_error(self, payload: Mapping[str, Any]) -> None:
+    def _api_error(self, event: _Event) -> None:
+        payload = event.payload
         span = self._start_chat_span(payload)
         reason = payload.get("reason")
         span.set_attribute("error.type", str(reason) if reason else "unknown")
@@ -247,7 +261,8 @@ class TraceRecorder:
         ended_at = payload.get("ended_at")
         span.end(end_time=_nanos(ended_at) if isinstance(ended_at, (int, float)) else None)
 
-    def _tool_call(self, payload: Mapping[str, Any]) -> None:
+    def _tool_call(self, event: _Event) -> None:
+        payload = event.payload
         tool_name = str(payload.get("tool_name") or "")
         duration_ms = payload.get("duration_ms")
         elapsed = float(duration_ms) / 1000.0 if isinstance(duration_ms, (int, float)) else 0.0

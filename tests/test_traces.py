@@ -8,6 +8,7 @@ the recorder never depends on when it happens to run.
 
 from __future__ import annotations
 
+import threading
 import time
 
 import pytest
@@ -294,3 +295,39 @@ def test_the_full_level_carries_the_model_output(recorder_and_spans) -> None:
     recorder.post_api_request(**_api_request())
     chat = _drain(dispatcher, exporter)["chat claude-opus-5"]
     assert chat.attributes["gen_ai.output.messages"] == "hello there"
+
+
+def test_structural_spans_start_when_the_hook_fired_not_when_the_worker_ran() -> None:
+    """A queue backlog must not make a parent span start after its children."""
+    exporter = InMemorySpanExporter()
+    provider = TracerProvider()
+    provider.add_span_processor(SimpleSpanProcessor(exporter))
+    dispatcher: Dispatcher[object] = Dispatcher(capacity=32)
+    recorder = TraceRecorder(
+        tracer=provider.get_tracer("hermess-metrics"),
+        redactor=Redactor.for_level(LEVEL_METADATA),
+        dispatcher=dispatcher,
+    )
+    release = threading.Event()
+
+    def gated(item: object) -> None:
+        release.wait(FLUSH)
+        recorder.handle(item)
+
+    dispatcher.start(gated)
+    try:
+        hook_fired_at = time.time()
+        recorder.on_session_start(session_id=SESSION, model="m", platform="cli")
+        recorder.pre_llm_call(session_id=SESSION, turn_id=TURN, model="m", platform="cli")
+        time.sleep(0.3)
+        release.set()
+        recorder.post_llm_call(session_id=SESSION, turn_id=TURN, model="m", platform="cli")
+        recorder.on_session_end(session_id=SESSION, completed=True, interrupted=False)
+        spans = _drain(dispatcher, exporter)
+    finally:
+        release.set()
+        dispatcher.stop(FLUSH)
+
+    for name in ("invoke_agent hermes", "turn"):
+        lag_ms = (spans[name].start_time / 1_000_000_000) - hook_fired_at
+        assert lag_ms < 0.1, f"{name} started {lag_ms:.3f}s after the hook fired"
