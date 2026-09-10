@@ -37,6 +37,7 @@ class Provisioned:
     expires_at: str = ""
     claim_url: str = field(default="", repr=False)
     can_query: bool = True
+    minted: bool = True
 
     @property
     def needs_claim(self) -> bool:
@@ -64,7 +65,7 @@ def provision(
     datasets = {signal: f"{prefix}-{signal}" for signal in DATASET_KINDS}
     for signal, name in datasets.items():
         admin.create_dataset(name, DATASET_KINDS[signal], DESCRIPTION)
-    token, can_query = _mint(admin, list(datasets.values()))
+    token, can_query, minted = _mint(admin, list(datasets.values()), org_token)
     return Provisioned(
         domain=plane.domain,
         region=provisioned_org.region if provisioned_org else "",
@@ -74,18 +75,31 @@ def provision(
         expires_at=provisioned_org.expires_at if provisioned_org else "",
         claim_url=provisioned_org.claim_url if provisioned_org else "",
         can_query=can_query,
+        minted=minted,
     )
 
 
-def _mint(admin: ControlPlane, datasets: list[str]) -> tuple[str, bool]:
-    """Ask for read as well as write, and settle for write when refused."""
-    try:
-        return admin.create_ingest_token(TOKEN_NAME, datasets, DESCRIPTION), True
-    except AxiomError as exc:
-        if exc.status not in (400, 403):
-            raise
-        logger.info("query capability refused, minting an ingest-only token: %s", exc.message)
-    return admin.create_ingest_token(TOKEN_NAME, datasets, DESCRIPTION, with_query=False), False
+def _refused(exc: AxiomError) -> bool:
+    return exc.status in (400, 403)
+
+
+def _mint(admin: ControlPlane, datasets: list[str], supplied: str | None) -> tuple[str, bool, bool]:
+    """Narrow the token as far as this org allows, keeping the supplied one if it cannot."""
+    for with_query in (True, False):
+        try:
+            token = admin.create_ingest_token(
+                TOKEN_NAME, datasets, DESCRIPTION, with_query=with_query
+            )
+        except AxiomError as exc:
+            if not _refused(exc):
+                raise
+            logger.info("token capability refused: %s", exc.message)
+        else:
+            return token, with_query, True
+    if supplied is None:
+        raise AxiomError(403, "cannot mint an ingest token in a provisioned org")
+    logger.info("keeping the supplied token; minting a narrower one was refused")
+    return supplied, True, False
 
 
 def env_values(provisioned: Provisioned) -> dict[str, str]:

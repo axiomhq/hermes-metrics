@@ -28,9 +28,9 @@ QUESTION = """Where should Hermes send its telemetry?
 
   1) Provision a new Axiom org now. Free, ready in seconds, and deleted
      within a day unless you follow the claim link to keep it.
-  2) Use an Axiom org you already have. The token needs two permissions,
-     datasets:create and apiTokens:create, because setup creates the three
-     datasets and then mints a narrow token scoped to them.
+  2) Use an Axiom org you already have. The token needs datasets:create.
+     Add apiTokens:create as well and setup will mint a narrow token to
+     store instead of yours; without it your token is stored as-is.
 
 Choose 1 or 2: """
 ORG_QUESTION = "Axiom org id (find it in the console URL; press enter if the token is org-scoped): "
@@ -47,8 +47,8 @@ def build_parser(parser: argparse.ArgumentParser) -> None:
     setup = actions.add_parser("setup", help="Create datasets and a token, then save them")
     setup.add_argument(
         "--token",
-        help=f"API token for an org you already have; needs {PERMISSION_DATASETS} "
-        f"and {PERMISSION_TOKENS}",
+        help=f"API token for an org you already have; needs {PERMISSION_DATASETS}, "
+        f"optionally {PERMISSION_TOKENS} to mint a narrower one",
     )
     setup.add_argument("--org", default="", help="Org id, if your token is not org-scoped")
     setup.add_argument("--provision", action="store_true", help="Provision a new temporary org")
@@ -173,7 +173,12 @@ def _report(result: Provisioned, target: Path, out: Callable[[str], None]) -> No
     for signal, dataset in result.datasets.items():
         out(f"  {signal:<8} {dataset}")
     out(f"  settings {target}")
-    if not result.can_query:
+    if not result.minted:
+        out("")
+        out("Stored the token you supplied, because minting a narrower one was")
+        out(f"refused. Add {PERMISSION_TOKENS} to that token and re-run to store a")
+        out("token limited to writing these three datasets instead.")
+    elif not result.can_query:
         out("")
         out("The saved token can write telemetry but not read it back, because the")
         out("token you supplied cannot grant query access on these datasets.")

@@ -236,6 +236,7 @@ class _NoQueryHandler(BaseHTTPRequestHandler):
     """Refuses query capability the way Axiom does when the grantor lacks it."""
 
     seen: list[dict[str, Any]] = []
+    refuse_all: bool = False
 
     def do_POST(self) -> None:  # noqa: N802
         length = int(self.headers.get("Content-Length") or 0)
@@ -243,6 +244,8 @@ class _NoQueryHandler(BaseHTTPRequestHandler):
         type(self).seen.append({"path": self.path, "body": body})
         if self.path == "/v2/datasets":
             payload, status = {"name": body["name"]}, 200
+        elif type(self).refuse_all:
+            payload, status = {"message": "You do not have create permission for apiTokens"}, 400
         elif any("query" in cap for cap in body.get("datasetCapabilities", {}).values()):
             payload, status = {"message": "You do not have read permission for query"}, 400
         else:
@@ -260,6 +263,7 @@ class _NoQueryHandler(BaseHTTPRequestHandler):
 @pytest.fixture
 def no_query_server():
     _NoQueryHandler.seen = []
+    _NoQueryHandler.refuse_all = False
     httpd = ThreadingHTTPServer(("127.0.0.1", 0), _NoQueryHandler)
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
     yield f"127.0.0.1:{httpd.server_port}", _NoQueryHandler
@@ -295,3 +299,46 @@ def test_a_non_permission_error_while_minting_is_not_retried(server, monkeypatch
     monkeypatch.setattr(ControlPlane, "create_ingest_token", explode)
     with pytest.raises(AxiomError):
         provision(plane, prefix="hermes", org_token="xaat-mine")
+
+
+def test_a_token_that_cannot_mint_keeps_the_supplied_one(no_query_server) -> None:
+    """datasets:create alone is enough; apiTokens:create only narrows the result."""
+    host, handler = no_query_server
+    handler.refuse_all = True
+    plane = ControlPlane(domain=host, scheme="http", backoff=0.0)
+    result = provision(plane, prefix="hermes", org_token="xaat-mine")
+    assert result.token == "xaat-mine"
+    assert result.minted is False
+    assert len(result.datasets) == 3
+
+
+def test_a_provisioned_org_never_keeps_the_full_permission_token(monkeypatch) -> None:
+    """Keeping it would leave a token that can delete datasets in the env file."""
+    from hermess_metrics import provision as provision_module
+    from hermess_metrics.control_plane import AxiomError
+
+    def refuse(self: Any, *args: Any, **kwargs: Any) -> Any:
+        raise AxiomError(403, "refused")
+
+    monkeypatch.setattr(ControlPlane, "create_ingest_token", refuse)
+    monkeypatch.setattr(ControlPlane, "create_dataset", lambda self, *a, **k: {})
+    monkeypatch.setattr(
+        ControlPlane,
+        "provision_org",
+        lambda self, **k: provision_module.ControlPlane and _fake_org(),
+    )
+    with pytest.raises(AxiomError):
+        provision(ControlPlane(domain="x", scheme="http", backoff=0.0), prefix="hermes")
+
+
+def _fake_org() -> Any:
+    from hermess_metrics.control_plane import ProvisionedOrg
+
+    return ProvisionedOrg(
+        id="o", name="n", region="r", expires_at="e", claim_url="c", token="xaat-full"
+    )
+
+
+def test_a_minted_token_is_reported_as_minted(server) -> None:
+    host, _ = server
+    assert _run(host).minted is True

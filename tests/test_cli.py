@@ -455,10 +455,11 @@ def test_a_detailed_denial_message_is_passed_through(denied_server, tmp_path, mo
     assert any("token does not have access" in line for line in out.lines)
 
 
-def test_the_question_names_both_permissions_setup_needs() -> None:
-    """The token mints a scoped token as well as creating datasets."""
+def test_the_question_names_the_required_and_optional_permissions() -> None:
+    """Only dataset creation is required; token creation just narrows the result."""
     assert cli.PERMISSION_DATASETS in cli.QUESTION
     assert cli.PERMISSION_TOKENS in cli.QUESTION
+    assert "without it your token is stored as-is" in cli.QUESTION
 
 
 def test_the_token_flag_help_names_both_permissions() -> None:
@@ -480,8 +481,27 @@ def test_an_ingest_only_token_is_called_out(server, tmp_path, monkeypatch) -> No
     host, _ = server
     _plain_http(monkeypatch)
     monkeypatch.setattr(
-        provision_module, "_mint", lambda admin, datasets: ("xaat-ingest-only", False)
+        provision_module,
+        "_mint",
+        lambda admin, datasets, supplied: ("xaat-ingest-only", False, True),
     )
     out = _Recorder()
     assert cli.run_setup(_args(host, tmp_path / ".env", provision=True), ask=_never, out=out) == 0
     assert any("cannot grant query access" in line for line in out.lines)
+
+
+def test_keeping_the_supplied_token_is_called_out(server, tmp_path, monkeypatch) -> None:
+    from hermess_metrics import provision as provision_module
+
+    host, _ = server
+    _plain_http(monkeypatch)
+    monkeypatch.setattr(
+        provision_module, "_mint", lambda admin, datasets, supplied: ("xaat-mine", True, False)
+    )
+    out = _Recorder()
+    code = cli.run_setup(_args(host, tmp_path / ".env", token="xaat-mine"), ask=_never, out=out)
+    assert code == 0
+    joined = "\n".join(out.lines)
+    assert "Stored the token you supplied" in joined
+    assert cli.PERMISSION_TOKENS in joined
+    assert (tmp_path / ".env").read_text().count("xaat-mine") == 1
