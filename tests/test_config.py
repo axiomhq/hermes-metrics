@@ -87,3 +87,13 @@ def test_every_env_name_carries_the_shared_prefix() -> None:
 def test_from_env_is_total(env: dict[str, str]) -> None:
     cfg = Config.from_env(env)
     assert cfg.active == (cfg.problems() == ())
+
+
+def test_queue_capacity_defaults_and_accepts_an_override() -> None:
+    assert Config.from_env({}).queue_capacity == 2048
+    assert Config.from_env({"HERMES_AXIOM_QUEUE_CAPACITY": "64"}).queue_capacity == 64
+
+
+def test_a_nonsense_queue_capacity_falls_back_to_the_default() -> None:
+    for raw in ("0", "-5", "lots", "3.5", ""):
+        assert Config.from_env({"HERMES_AXIOM_QUEUE_CAPACITY": raw}).queue_capacity == 2048

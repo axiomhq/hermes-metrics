@@ -10,6 +10,8 @@ import os
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 
+from .dispatch import DEFAULT_CAPACITY
+
 ENV_PREFIX = "HERMES_AXIOM_"
 
 ENV_TOKEN = ENV_PREFIX + "TOKEN"
@@ -18,6 +20,7 @@ ENV_TRACES_DATASET = ENV_PREFIX + "TRACES_DATASET"
 ENV_LOGS_DATASET = ENV_PREFIX + "LOGS_DATASET"
 ENV_METRICS_DATASET = ENV_PREFIX + "METRICS_DATASET"
 ENV_SERVICE_NAME = ENV_PREFIX + "SERVICE_NAME"
+ENV_QUEUE_CAPACITY = ENV_PREFIX + "QUEUE_CAPACITY"
 ENV_DEBUG = ENV_PREFIX + "DEBUG"
 
 DEFAULT_DOMAIN = "api.axiom.co"
@@ -44,6 +47,14 @@ _SCHEMES = ("https://", "http://")
 
 def _text(env: Mapping[str, str], name: str) -> str:
     return env.get(name, "").strip()
+
+
+def _positive_int(raw: str, fallback: int) -> int:
+    try:
+        value = int(raw)
+    except ValueError:
+        return fallback
+    return value if value > 0 else fallback
 
 
 def _host(raw: str) -> str:
@@ -74,6 +85,7 @@ class Config:
     logs_dataset: str = ""
     metrics_dataset: str = ""
     service_name: str = DEFAULT_SERVICE_NAME
+    queue_capacity: int = DEFAULT_CAPACITY
     debug: bool = False
 
     @staticmethod
@@ -86,6 +98,7 @@ class Config:
                 ENV_LOGS_DATASET,
                 ENV_METRICS_DATASET,
                 ENV_SERVICE_NAME,
+                ENV_QUEUE_CAPACITY,
                 ENV_DEBUG,
             }
         )
@@ -100,6 +113,7 @@ class Config:
             logs_dataset=_text(source, ENV_LOGS_DATASET),
             metrics_dataset=_text(source, ENV_METRICS_DATASET),
             service_name=_text(source, ENV_SERVICE_NAME) or DEFAULT_SERVICE_NAME,
+            queue_capacity=_positive_int(_text(source, ENV_QUEUE_CAPACITY), DEFAULT_CAPACITY),
             debug=_text(source, ENV_DEBUG).lower() in _TRUTHY,
         )
 
