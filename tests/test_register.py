@@ -108,6 +108,7 @@ def test_register_never_raises(env: dict[str, str]) -> None:
 
 
 def test_register_stays_idle_when_the_otlp_extra_is_absent(monkeypatch: Any) -> None:
+    """The command must exist here too; a drop-in install lands in exactly this state."""
     from hermess_metrics import transport
 
     monkeypatch.setattr(transport, "sdk_hint", lambda: "the opentelemetry SDK is required")
@@ -115,6 +116,7 @@ def test_register_stays_idle_when_the_otlp_extra_is_absent(monkeypatch: Any) -> 
     config = hermess_metrics.register(ctx, env=FULL_ENV, runtime_factory=_FakeRuntime)
     assert config.active
     assert ctx.hooks == []
+    assert ctx.cli_commands == ["axiom"]
 
 
 def test_the_setup_command_is_available_even_when_idle() -> None:
@@ -127,3 +129,19 @@ def test_the_setup_command_is_available_when_configured() -> None:
     ctx = FakeCtx()
     hermess_metrics.register(ctx, env=FULL_ENV, runtime_factory=_FakeRuntime)
     assert ctx.cli_commands == ["axiom"]
+
+
+def test_the_command_is_registered_however_registration_ends() -> None:
+    """Whatever else fails, `hermes axiom` has to exist."""
+    from hermess_metrics import transport
+
+    cases = [
+        ({}, _FakeRuntime),
+        (FULL_ENV, _FakeRuntime),
+        (FULL_ENV, _explode),
+    ]
+    for env, factory in cases:
+        ctx = FakeCtx()
+        hermess_metrics.register(ctx, env=env, runtime_factory=factory)
+        assert ctx.cli_commands == ["axiom"], (env, factory)
+    assert transport is not None
