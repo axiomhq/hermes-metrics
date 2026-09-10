@@ -345,3 +345,22 @@ def test_a_token_refused_by_every_read_is_reported_as_refused(server) -> None:
 def test_an_unreachable_host_gives_no_verdict() -> None:
     plane = ControlPlane(domain="127.0.0.1:1", token="t", scheme="http", backoff=0.0)
     assert plane.token_is_accepted() is None
+
+
+def test_creating_a_monitor_sends_it_and_names_the_permission(server) -> None:
+    host, handler = server
+    handler.script["/v2/monitors"] = (200, {"id": "mon1"})
+    plane = _plane(host, token="t")
+    result = plane.create_monitor({"name": "x", "type": "Threshold"})
+    assert result["id"] == "mon1"
+    assert handler.seen[0]["body"]["name"] == "x"
+
+
+def test_a_refused_monitor_names_the_permission_it_needed(server) -> None:
+    from hermess_metrics.control_plane import PERMISSION_MONITORS
+
+    host, handler = server
+    handler.script["/v2/monitors"] = (403, {"message": "nope"})
+    with pytest.raises(AxiomError) as caught:
+        _plane(host, token="t").create_monitor({"name": "x", "type": "Threshold"})
+    assert caught.value.permission == PERMISSION_MONITORS

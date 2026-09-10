@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from . import alerts
 from .config import Config
 from .control_plane import (
     DEFAULT_DOMAIN,
@@ -57,6 +58,10 @@ def build_parser(parser: argparse.ArgumentParser) -> None:
     setup.add_argument("--region", help="Edge deployment for a new org")
     setup.add_argument("--env-file", help="Where to write settings")
     actions.add_parser("status", help="Show what the plugin is configured to do")
+    alerts_cmd = actions.add_parser("alerts", help="Create the monitor pack in your org")
+    alerts_cmd.add_argument("--token", help="API token that can create monitors")
+    alerts_cmd.add_argument("--org", default="", help="Org id, if your token is not org-scoped")
+    alerts_cmd.add_argument("--domain", default=DEFAULT_DOMAIN, help="Axiom API host")
 
 
 def register_cli(ctx: Any) -> None:
@@ -70,9 +75,35 @@ def register_cli(ctx: Any) -> None:
 
 
 def handle(args: argparse.Namespace) -> int:
-    if getattr(args, "axiom_action", None) == "status":
+    action = getattr(args, "axiom_action", None)
+    if action == "status":
         return run_status()
+    if action == "alerts":
+        return run_alerts(args)
     return run_setup(args)
+
+
+def run_alerts(args: argparse.Namespace, out: Callable[[str], None] = print) -> int:
+    """Create the monitor pack against the datasets already configured."""
+    config = Config.from_env()
+    if not config.configured_signals:
+        out("Nothing to alert on yet; run `hermes axiom setup` first.")
+        return 1
+    token = str(getattr(args, "token", "") or config.token)
+    plane = ControlPlane(domain=args.domain, token=token, org=str(args.org or config.org))
+    datasets = {signal: config.dataset_for(signal) for signal in config.configured_signals}
+    report = alerts.create(plane, datasets)
+    _report_alerts(report, out)
+    return 0 if report.created else 1
+
+
+def _report_alerts(report: alerts.Report, out: Callable[[str], None]) -> None:
+    out(f"Created {len(report.created)} of {report.total} monitors.")
+    for name in report.created:
+        out(f"  ok      {name}")
+    for name, reason in report.failed:
+        out(f"  skipped {name}")
+        out(f"          {reason[:110]}")
 
 
 def _choose(ask: Callable[[str], str], args: argparse.Namespace) -> tuple[str | None, str]:

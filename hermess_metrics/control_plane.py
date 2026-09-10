@@ -21,6 +21,7 @@ PROBE_PATHS = ("/v2/tokens", "/v2/datasets", "/v2/dashboards")
 
 PERMISSION_DATASETS = "datasets:create"
 PERMISSION_TOKENS = "apiTokens:create"
+PERMISSION_MONITORS = "monitors:create"
 
 DATASET_KINDS = {
     "traces": "otel:traces:v1",
@@ -152,6 +153,15 @@ class ControlPlane:
             else:
                 return True
         return False if refused else None
+
+    def create_monitor(self, spec: dict[str, Any]) -> dict[str, Any]:
+        result = self._post(
+            "/v2/monitors",
+            spec,
+            operation=f"creating monitor {spec.get('name', '')!r}",
+            permission=PERMISSION_MONITORS,
+        )
+        return result if isinstance(result, dict) else {}
 
     def _post(
         self,

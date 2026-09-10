@@ -533,3 +533,57 @@ def test_status_names_both_problems_when_both_apply(monkeypatch) -> None:
     joined = "\n".join(out.lines)
     assert "cannot export" in joined
     assert "Settings are missing too" in joined
+
+
+def _alert_args(host: str, **overrides: Any) -> argparse.Namespace:
+    values: dict[str, Any] = {"axiom_action": "alerts", "token": None, "org": "", "domain": host}
+    values.update(overrides)
+    return argparse.Namespace(**values)
+
+
+def test_alerts_without_setup_says_so(monkeypatch) -> None:
+    for name in (
+        "HERMES_AXIOM_TRACES_DATASET",
+        "HERMES_AXIOM_LOGS_DATASET",
+        "HERMES_AXIOM_METRICS_DATASET",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    out = _Recorder()
+    assert cli.run_alerts(_alert_args("x"), out=out) == 1
+    assert "setup" in out.lines[0]
+
+
+def test_alerts_reports_each_monitor(monkeypatch) -> None:
+    monkeypatch.setenv("HERMES_AXIOM_TOKEN", "xaat-1")
+    monkeypatch.setenv("HERMES_AXIOM_TRACES_DATASET", "hermes-traces")
+    monkeypatch.setenv("HERMES_AXIOM_METRICS_DATASET", "hermes-metrics")
+    created: list[str] = []
+
+    def fake_create(plane: Any, datasets: dict[str, str]) -> Any:
+        created.append("called")
+        return cli.alerts.Report(created=["one"], failed=[("two", "nope")])
+
+    monkeypatch.setattr(cli.alerts, "create", fake_create)
+    out = _Recorder()
+    assert cli.run_alerts(_alert_args("x"), out=out) == 0
+    joined = "\n".join(out.lines)
+    assert "Created 1 of 2" in joined
+    assert "ok      one" in joined
+    assert "skipped two" in joined
+    assert "nope" in joined
+
+
+def test_alerts_exits_nonzero_when_nothing_was_created(monkeypatch) -> None:
+    monkeypatch.setenv("HERMES_AXIOM_TOKEN", "xaat-1")
+    monkeypatch.setenv("HERMES_AXIOM_TRACES_DATASET", "hermes-traces")
+    monkeypatch.setattr(
+        cli.alerts, "create", lambda plane, datasets: cli.alerts.Report(failed=[("a", "b")])
+    )
+    assert cli.run_alerts(_alert_args("x"), out=_Recorder()) == 1
+
+
+def test_handle_routes_to_alerts(monkeypatch) -> None:
+    monkeypatch.delenv("HERMES_AXIOM_TRACES_DATASET", raising=False)
+    monkeypatch.delenv("HERMES_AXIOM_LOGS_DATASET", raising=False)
+    monkeypatch.delenv("HERMES_AXIOM_METRICS_DATASET", raising=False)
+    assert cli.handle(_alert_args("x")) == 1
