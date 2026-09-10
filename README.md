@@ -32,9 +32,9 @@ have, with a token holding `datasets:create`. Either way it then creates the
 datasets, the seven monitors and the dashboard pictured above, writes the
 settings, and you are done. `hermes axiom status` confirms it.
 
-Setup takes the default alert thresholds. `hermes axiom alerts` re-runs them
-and asks for the two budgets that depend on your workload, and every threshold
-can be changed in the console.
+Along the way it asks for the alert thresholds that depend on your workload,
+each with a default you can accept by pressing enter. Every threshold can also
+be changed later in the Axiom console, or with `hermes axiom alerts`.
 
 ## What you get
 

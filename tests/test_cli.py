@@ -76,6 +76,10 @@ def _args(host: str, target: Path, **overrides: Any) -> argparse.Namespace:
         "env_file": str(target),
         "no_alerts": True,
         "no_dashboard": True,
+        "tokens_per_15m": None,
+        "spend_per_hour": None,
+        "max_subagents": None,
+        "defaults": True,
     }
     values.update(overrides)
     return argparse.Namespace(**values)
@@ -841,3 +845,48 @@ def test_setup_uses_the_token_it_persisted(server, tmp_path, monkeypatch) -> Non
     cli.run_setup(_full_setup_args(host, tmp_path / ".env"), ask=_never, out=_Recorder())
     written = (tmp_path / ".env").read_text()
     assert "HERMES_AXIOM_TOKEN=xaat-scoped" in written
+
+
+def test_setup_asks_for_the_budgets_before_creating_anything(server, tmp_path, monkeypatch) -> None:
+    """A cancelled answer must not leave a half-built org behind."""
+    host, handler = server
+    _plain_http(monkeypatch)
+    args = _full_setup_args(host, tmp_path / ".env")
+    args.defaults = False
+    out = _Recorder()
+    assert cli.run_setup(args, ask=lambda p: "banana", out=out) == 2
+    assert handler.seen == []
+    assert "cancelled" in out.lines[-1]
+
+
+def test_setup_budget_answers_reach_the_monitors(server, tmp_path, monkeypatch) -> None:
+    host, handler = server
+    handler.script["/v2/monitors"] = (200, {"id": "m"})
+    handler.script["/v2/dashboards"] = (200, {"dashboard": {"uid": "b"}})
+    _plain_http(monkeypatch)
+    seen: list[Any] = []
+    real = cli.alerts.create
+
+    def spy(plane: Any, datasets: dict[str, str], budgets: Any = None) -> Any:
+        seen.append(budgets)
+        return real(plane, datasets, budgets)
+
+    monkeypatch.setattr(cli.alerts, "create", spy)
+    args = _full_setup_args(host, tmp_path / ".env")
+    args.defaults = False
+    answers = iter(["250000", "2.50", "3"])
+    assert cli.run_setup(args, ask=lambda p: next(answers), out=_Recorder()) == 0
+    assert seen[0].tokens_per_15m == 250_000
+    assert seen[0].spend_per_hour == 2.5
+    sent = [r["body"] for r in handler.seen if r["path"] == "/v2/monitors"]
+    thresholds = {b["name"]: b["threshold"] for b in sent}
+    assert thresholds["Hermes token use is high"] == 250_000
+    assert thresholds["Hermes spend is high"] == 2.5
+
+
+def test_setup_skipping_alerts_asks_no_budget_questions(server, tmp_path, monkeypatch) -> None:
+    host, _ = server
+    _plain_http(monkeypatch)
+    args = _args(host, tmp_path / ".env", provision=True)
+    args.defaults = False
+    assert cli.run_setup(args, ask=_never, out=_Recorder()) == 0

@@ -59,6 +59,12 @@ def build_parser(parser: argparse.ArgumentParser) -> None:
     setup.add_argument("--region", help="Edge deployment for a new org")
     setup.add_argument("--env-file", help="Where to write settings")
     setup.add_argument("--no-alerts", action="store_true", help="Skip creating the monitors")
+    setup.add_argument("--tokens-per-15m", type=float, help="Token budget per 15 minutes")
+    setup.add_argument("--spend-per-hour", type=float, help="Spend budget per hour, USD")
+    setup.add_argument("--max-subagents", type=float, help="Concurrent subagents allowed")
+    setup.add_argument(
+        "--defaults", action="store_true", help="Take every alert default without asking"
+    )
     setup.add_argument("--no-dashboard", action="store_true", help="Skip creating the dashboard")
     actions.add_parser("status", help="Show what the plugin is configured to do")
     alerts_cmd = actions.add_parser("alerts", help="Create the monitor pack in your org")
@@ -227,8 +233,13 @@ def run_setup(
     ask: Callable[[str], str] = input,
     out: Callable[[str], None] = print,
 ) -> int:
+    budgets = None
     try:
         org_token, org = _choose(ask, args)
+        if not getattr(args, "no_alerts", False):
+            out("")
+            out("Two of the monitors need a number that depends on your workload.")
+            budgets = _budgets(ask, args)
     except (ValueError, EOFError, KeyboardInterrupt) as exc:
         out(f"Setup cancelled: {exc}")
         return 2
@@ -245,16 +256,21 @@ def run_setup(
     target = Path(args.env_file) if args.env_file else hermes_home() / ENV_FILENAME
     write_env(target, env_values(result))
     _report(result, target, out)
-    _extras(args, result, out)
+    _extras(args, result, budgets, out)
     _claim(result, out)
     return 0
 
 
-def _extras(args: argparse.Namespace, result: Provisioned, out: Callable[[str], None]) -> None:
+def _extras(
+    args: argparse.Namespace,
+    result: Provisioned,
+    budgets: alerts.Budgets | None,
+    out: Callable[[str], None],
+) -> None:
     """Create the monitors and the dashboard with the token setup just persisted."""
     plane = ControlPlane(domain=result.domain, token=result.token, org=result.org_id)
     if not getattr(args, "no_alerts", False):
-        report = alerts.create(plane, result.datasets)
+        report = alerts.create(plane, result.datasets, budgets)
         if report.created:
             out(f"  monitors {len(report.created)} created")
         if report.failed:
