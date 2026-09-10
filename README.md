@@ -22,7 +22,7 @@ question:
 pip install 'hermess-metrics[otlp] @ git+https://github.com/axiomhq/hermess-metrics'
 hermes plugins enable hermess-metrics
 hermes axiom setup
-hermes axiom alerts        # optional, needs monitors:create
+hermes axiom alerts        # optional, adds the monitors above
 ```
 
 Setup asks where telemetry should go. Choose **1** and it provisions a fresh

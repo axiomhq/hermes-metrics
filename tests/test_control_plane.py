@@ -365,3 +365,20 @@ def test_a_refused_monitor_names_the_permission_it_needed(server) -> None:
     with pytest.raises(AxiomError) as caught:
         _plane(host, token="t").create_monitor({"name": "x", "type": "Threshold"})
     assert caught.value.permission == PERMISSION_MONITORS
+
+
+def test_a_minted_token_can_also_alert(server) -> None:
+    """Otherwise the very next command needs a different token."""
+    from hermess_metrics.control_plane import ALERTING_CAPABILITIES
+
+    host, handler = server
+    handler.script["/v2/tokens"] = (200, {"token": "xaat-scoped"})
+    _plane(host, token="t").create_ingest_token("ingest", ["a"])
+    assert handler.seen[0]["body"]["orgCapabilities"] == ALERTING_CAPABILITIES
+
+
+def test_alerting_can_be_left_off(server) -> None:
+    host, handler = server
+    handler.script["/v2/tokens"] = (200, {"token": "xaat-scoped"})
+    _plane(host, token="t").create_ingest_token("ingest", ["a"], with_alerting=False)
+    assert "orgCapabilities" not in handler.seen[0]["body"]

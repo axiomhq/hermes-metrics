@@ -343,3 +343,20 @@ def _fake_org() -> Any:
 def test_a_minted_token_is_reported_as_minted(server) -> None:
     host, _ = server
     assert _run(host).minted is True
+
+
+def test_minting_asks_for_alerting_before_settling_for_less(no_query_server) -> None:
+    host, handler = no_query_server
+    plane = ControlPlane(domain=host, scheme="http", backoff=0.0)
+    provision(plane, prefix="hermes", org_token="xaat-mine")
+    asked = [r["body"] for r in handler.seen if r["path"] == "/v2/tokens"]
+    assert "orgCapabilities" in asked[0]
+
+
+def test_an_org_refusing_alerting_still_gets_a_token(no_query_server) -> None:
+    """The fallback ladder drops one capability at a time, not the whole mint."""
+    host, handler = no_query_server
+    plane = ControlPlane(domain=host, scheme="http", backoff=0.0)
+    result = provision(plane, prefix="hermes", org_token="xaat-mine")
+    assert result.token == "xaat-ingest-only"
+    assert result.minted is True

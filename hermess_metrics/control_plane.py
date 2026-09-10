@@ -24,6 +24,12 @@ PERMISSION_DATASETS = "datasets:create"
 PERMISSION_TOKENS = "apiTokens:create"
 PERMISSION_MONITORS = "monitors:create"
 
+# What `hermes axiom alerts` and a dashboard need beyond writing telemetry.
+ALERTING_CAPABILITIES = {
+    "monitors": ["create", "read"],
+    "dashboards": ["create", "read"],
+}
+
 DATASET_KINDS = {
     "traces": "otel:traces:v1",
     "logs": "otel:logs:v1",
@@ -118,17 +124,24 @@ class ControlPlane:
         return result if isinstance(result, dict) else {}
 
     def create_ingest_token(
-        self, name: str, datasets: list[str], description: str = "", with_query: bool = True
+        self,
+        name: str,
+        datasets: list[str],
+        description: str = "",
+        with_query: bool = True,
+        with_alerting: bool = True,
     ) -> str:
-        """Mint a token scoped to these datasets, and nothing else."""
+        """Mint a token scoped to these datasets plus the alerting it needs."""
         capability: dict[str, list[str]] = {"ingest": ["create"]}
         if with_query:
             capability["query"] = ["read"]
-        payload = {
+        payload: dict[str, Any] = {
             "name": name,
             "description": description,
             "datasetCapabilities": {dataset: dict(capability) for dataset in datasets},
         }
+        if with_alerting:
+            payload["orgCapabilities"] = dict(ALERTING_CAPABILITIES)
         body = self._post(
             "/v2/tokens",
             payload,
