@@ -1,0 +1,482 @@
+{
+  "charts": [
+    {
+      "id": "header",
+      "name": "About",
+      "text": "## Hermes agent telemetry\n\nSpend, throughput and health for this Hermes install. Cost is charged from published rates at the time of each call, so a subscription route charges zero. Telemetry health at the bottom says whether the rest of this board can be trusted.",
+      "type": "Note"
+    },
+    {
+      "id": "spend-total",
+      "name": "Spend (USD)",
+      "query": {
+        "apl": "`{{metrics}}`:`hermes.gen_ai.cost`\n| align to $__interval using max\n| group using sum",
+        "metricsDataset": "{{metrics}}"
+      },
+      "type": "Statistic",
+      "unit": "CurrencyUSD"
+    },
+    {
+      "id": "tokens-total",
+      "name": "Tokens",
+      "query": {
+        "apl": "`{{metrics}}`:`gen_ai.client.token.usage`\n| align to $__interval using max\n| group using sum",
+        "metricsDataset": "{{metrics}}"
+      },
+      "type": "Statistic"
+    },
+    {
+      "id": "calls-total",
+      "name": "Provider calls",
+      "query": {
+        "apl": "`{{metrics}}`:`hermes.gen_ai.requests`\n| align to $__interval using max\n| group using sum",
+        "metricsDataset": "{{metrics}}"
+      },
+      "type": "Statistic"
+    },
+    {
+      "id": "api-latency",
+      "name": "API latency (s)",
+      "query": {
+        "apl": "`{{metrics}}`:`gen_ai.client.operation.duration`\n| align to $__interval using avg\n| group using avg",
+        "metricsDataset": "{{metrics}}"
+      },
+      "type": "Statistic",
+      "unit": "TimeSec"
+    },
+    {
+      "id": "cost-note",
+      "name": "Cost",
+      "text": "### Cost",
+      "type": "Note"
+    },
+    {
+      "customUnits": "USD",
+      "id": "spend-rate",
+      "name": "Spend rate by model (USD/hour)",
+      "query": {
+        "apl": "`{{metrics}}`:`hermes.gen_ai.cost`\n| map rate\n| map * 3600\n| align to $__interval using avg\n| group by `gen_ai.request.model` using sum",
+        "metricsDataset": "{{metrics}}"
+      },
+      "type": "TimeSeries"
+    },
+    {
+      "id": "token-rate",
+      "name": "Token rate by type (tokens/s)",
+      "query": {
+        "apl": "`{{metrics}}`:`gen_ai.client.token.usage`\n| map rate\n| align to $__interval using avg\n| group by `gen_ai.token.type` using sum",
+        "metricsDataset": "{{metrics}}"
+      },
+      "type": "TimeSeries"
+    },
+    {
+      "customUnits": "USD",
+      "id": "price-input",
+      "name": "Published input rate (USD/Mtok)",
+      "query": {
+        "apl": "`{{metrics}}`:`hermes.gen_ai.input_token_cost`\n| align to $__interval using max\n| group by `gen_ai.request.model` using max",
+        "metricsDataset": "{{metrics}}"
+      },
+      "type": "TimeSeries"
+    },
+    {
+      "id": "context-size",
+      "name": "Prompt size (tokens)",
+      "query": {
+        "apl": "`{{metrics}}`:`hermes.gen_ai.context_tokens`\n| align to $__interval using avg\n| group by `gen_ai.request.model` using avg",
+        "metricsDataset": "{{metrics}}"
+      },
+      "type": "TimeSeries"
+    },
+    {
+      "id": "perf-note",
+      "name": "Behaviour",
+      "text": "### Behaviour",
+      "type": "Note"
+    },
+    {
+      "customUnits": "s",
+      "id": "api-duration",
+      "name": "Provider call duration (s)",
+      "query": {
+        "apl": "`{{metrics}}`:`gen_ai.client.operation.duration`\n| align to $__interval using avg\n| group by `gen_ai.request.model` using avg",
+        "metricsDataset": "{{metrics}}"
+      },
+      "type": "TimeSeries"
+    },
+    {
+      "id": "tool-rate",
+      "name": "Tool calls by tool (calls/s)",
+      "query": {
+        "apl": "`{{metrics}}`:`hermes.tool.calls`\n| map rate\n| align to $__interval using avg\n| group by `gen_ai.tool.name` using sum",
+        "metricsDataset": "{{metrics}}"
+      },
+      "type": "TimeSeries"
+    },
+    {
+      "customUnits": "s",
+      "id": "turn-duration",
+      "name": "Turn duration (s)",
+      "query": {
+        "apl": "`{{metrics}}`:`hermes.turn.duration`\n| align to $__interval using avg\n| group using avg",
+        "metricsDataset": "{{metrics}}"
+      },
+      "type": "TimeSeries"
+    },
+    {
+      "id": "turn-shape",
+      "name": "Provider calls per turn",
+      "query": {
+        "apl": "`{{metrics}}`:`hermes.turn.api_calls`\n| align to $__interval using avg\n| group using avg",
+        "metricsDataset": "{{metrics}}"
+      },
+      "type": "TimeSeries"
+    },
+    {
+      "id": "subagents-active",
+      "name": "Subagents running",
+      "query": {
+        "apl": "`{{metrics}}`:`hermes.subagents.active`\n| align to $__interval using max\n| group using max",
+        "metricsDataset": "{{metrics}}"
+      },
+      "type": "TimeSeries"
+    },
+    {
+      "id": "health-note",
+      "name": "Plugin health",
+      "text": "### Plugin health\n\nA rising drop count means the numbers above understate reality. Queue depth rising means the exporter is not keeping up.",
+      "type": "Note"
+    },
+    {
+      "id": "telemetry-accepted",
+      "name": "Events accepted",
+      "query": {
+        "apl": "`{{metrics}}`:`hermes.telemetry.accepted`\n| align to $__interval using max\n| group using sum",
+        "metricsDataset": "{{metrics}}"
+      },
+      "type": "Statistic"
+    },
+    {
+      "id": "telemetry-dropped",
+      "name": "Events dropped",
+      "query": {
+        "apl": "`{{metrics}}`:`hermes.telemetry.dropped`\n| align to $__interval using max\n| group using sum",
+        "metricsDataset": "{{metrics}}"
+      },
+      "type": "Statistic"
+    },
+    {
+      "id": "telemetry-failed",
+      "name": "Handler failures",
+      "query": {
+        "apl": "`{{metrics}}`:`hermes.telemetry.failed`\n| align to $__interval using max\n| group using sum",
+        "metricsDataset": "{{metrics}}"
+      },
+      "type": "Statistic"
+    },
+    {
+      "id": "queue-depth",
+      "name": "Export queue depth",
+      "query": {
+        "apl": "`{{metrics}}`:`hermes.telemetry.queue_depth`\n| align to $__interval using max\n| group using max",
+        "metricsDataset": "{{metrics}}"
+      },
+      "type": "TimeSeries"
+    },
+    {
+      "id": "evidence-note",
+      "name": "Evidence",
+      "text": "### Evidence",
+      "type": "Note"
+    },
+    {
+      "id": "slow-calls",
+      "name": "Slowest provider calls",
+      "query": {
+        "apl": "['{{traces}}']\n| where name startswith 'chat'\n| project _time, name, duration, ['attributes.gen_ai.usage.input_tokens'], ['attributes.gen_ai.usage.output_tokens']\n| top 20 by duration desc"
+      },
+      "type": "Table"
+    },
+    {
+      "id": "recent-errors",
+      "name": "Recent failures",
+      "query": {
+        "apl": "['{{logs}}']\n| project _time, severity, body, ['attributes.error.type'], ['attributes.hermes.session_id']\n| take 200"
+      },
+      "type": "LogStream"
+    }
+  ],
+  "description": "Spend, behaviour and health for this Hermes install, from the hermess-metrics plugin.",
+  "layout": [
+    {
+      "h": 2,
+      "i": "header",
+      "minH": 2,
+      "minW": 2,
+      "moved": false,
+      "static": false,
+      "w": 12,
+      "x": 0,
+      "y": 0
+    },
+    {
+      "h": 3,
+      "i": "spend-total",
+      "minH": 2,
+      "minW": 2,
+      "moved": false,
+      "static": false,
+      "w": 3,
+      "x": 0,
+      "y": 2
+    },
+    {
+      "h": 3,
+      "i": "tokens-total",
+      "minH": 2,
+      "minW": 2,
+      "moved": false,
+      "static": false,
+      "w": 3,
+      "x": 3,
+      "y": 2
+    },
+    {
+      "h": 3,
+      "i": "calls-total",
+      "minH": 2,
+      "minW": 2,
+      "moved": false,
+      "static": false,
+      "w": 3,
+      "x": 6,
+      "y": 2
+    },
+    {
+      "h": 3,
+      "i": "api-latency",
+      "minH": 2,
+      "minW": 2,
+      "moved": false,
+      "static": false,
+      "w": 3,
+      "x": 9,
+      "y": 2
+    },
+    {
+      "h": 1,
+      "i": "cost-note",
+      "minH": 1,
+      "minW": 2,
+      "moved": false,
+      "static": false,
+      "w": 12,
+      "x": 0,
+      "y": 5
+    },
+    {
+      "h": 4,
+      "i": "spend-rate",
+      "minH": 2,
+      "minW": 2,
+      "moved": false,
+      "static": false,
+      "w": 6,
+      "x": 0,
+      "y": 6
+    },
+    {
+      "h": 4,
+      "i": "token-rate",
+      "minH": 2,
+      "minW": 2,
+      "moved": false,
+      "static": false,
+      "w": 6,
+      "x": 6,
+      "y": 6
+    },
+    {
+      "h": 4,
+      "i": "price-input",
+      "minH": 2,
+      "minW": 2,
+      "moved": false,
+      "static": false,
+      "w": 6,
+      "x": 0,
+      "y": 10
+    },
+    {
+      "h": 4,
+      "i": "context-size",
+      "minH": 2,
+      "minW": 2,
+      "moved": false,
+      "static": false,
+      "w": 6,
+      "x": 6,
+      "y": 10
+    },
+    {
+      "h": 1,
+      "i": "perf-note",
+      "minH": 1,
+      "minW": 2,
+      "moved": false,
+      "static": false,
+      "w": 12,
+      "x": 0,
+      "y": 14
+    },
+    {
+      "h": 4,
+      "i": "api-duration",
+      "minH": 2,
+      "minW": 2,
+      "moved": false,
+      "static": false,
+      "w": 6,
+      "x": 0,
+      "y": 15
+    },
+    {
+      "h": 4,
+      "i": "tool-rate",
+      "minH": 2,
+      "minW": 2,
+      "moved": false,
+      "static": false,
+      "w": 6,
+      "x": 6,
+      "y": 15
+    },
+    {
+      "h": 4,
+      "i": "turn-duration",
+      "minH": 2,
+      "minW": 2,
+      "moved": false,
+      "static": false,
+      "w": 6,
+      "x": 0,
+      "y": 19
+    },
+    {
+      "h": 4,
+      "i": "turn-shape",
+      "minH": 2,
+      "minW": 2,
+      "moved": false,
+      "static": false,
+      "w": 6,
+      "x": 6,
+      "y": 19
+    },
+    {
+      "h": 3,
+      "i": "subagents-active",
+      "minH": 2,
+      "minW": 2,
+      "moved": false,
+      "static": false,
+      "w": 12,
+      "x": 0,
+      "y": 23
+    },
+    {
+      "h": 2,
+      "i": "health-note",
+      "minH": 2,
+      "minW": 2,
+      "moved": false,
+      "static": false,
+      "w": 12,
+      "x": 0,
+      "y": 26
+    },
+    {
+      "h": 3,
+      "i": "telemetry-accepted",
+      "minH": 2,
+      "minW": 2,
+      "moved": false,
+      "static": false,
+      "w": 4,
+      "x": 0,
+      "y": 28
+    },
+    {
+      "h": 3,
+      "i": "telemetry-dropped",
+      "minH": 2,
+      "minW": 2,
+      "moved": false,
+      "static": false,
+      "w": 4,
+      "x": 4,
+      "y": 28
+    },
+    {
+      "h": 3,
+      "i": "telemetry-failed",
+      "minH": 2,
+      "minW": 2,
+      "moved": false,
+      "static": false,
+      "w": 4,
+      "x": 8,
+      "y": 28
+    },
+    {
+      "h": 4,
+      "i": "queue-depth",
+      "minH": 2,
+      "minW": 2,
+      "moved": false,
+      "static": false,
+      "w": 12,
+      "x": 0,
+      "y": 31
+    },
+    {
+      "h": 1,
+      "i": "evidence-note",
+      "minH": 1,
+      "minW": 2,
+      "moved": false,
+      "static": false,
+      "w": 12,
+      "x": 0,
+      "y": 35
+    },
+    {
+      "h": 5,
+      "i": "slow-calls",
+      "minH": 2,
+      "minW": 2,
+      "moved": false,
+      "static": false,
+      "w": 12,
+      "x": 0,
+      "y": 36
+    },
+    {
+      "h": 6,
+      "i": "recent-errors",
+      "minH": 2,
+      "minW": 2,
+      "moved": false,
+      "static": false,
+      "w": 12,
+      "x": 0,
+      "y": 41
+    }
+  ],
+  "name": "Hermes agent telemetry",
+  "overrides": {},
+  "refreshTime": 300,
+  "schemaVersion": 2,
+  "timeWindowEnd": "qr-now",
+  "timeWindowStart": "qr-now-1h"
+}

@@ -22,17 +22,19 @@ question:
 pip install 'hermess-metrics[otlp] @ git+https://github.com/axiomhq/hermess-metrics'
 hermes plugins enable hermess-metrics
 hermes axiom setup
-hermes axiom alerts        # optional, adds the monitors above
 ```
 
 Setup asks where telemetry should go. Choose **1** and it provisions a fresh
 Axiom org in seconds, creates the three datasets, mints a token that can only
 write to them, and prints a claim link. Follow that link within a day or the org
 and everything in it is deleted. Choose **2** to use an Axiom org you already
-have, with a token holding `datasets:create`. Either way it writes the settings
-and you are done; `hermes axiom status` confirms it, and `hermes axiom alerts`
-adds the seven monitors pictured above, asking you for the two budgets that
-depend on your workload.
+have, with a token holding `datasets:create`. Either way it then creates the
+datasets, the seven monitors and the dashboard pictured above, writes the
+settings, and you are done. `hermes axiom status` confirms it.
+
+Setup takes the default alert thresholds. `hermes axiom alerts` re-runs them
+and asks for the two budgets that depend on your workload, and every threshold
+can be changed in the console.
 
 ## What you get
 

@@ -23,6 +23,7 @@ PROBE_PATHS = ("/v2/tokens", "/v2/datasets", "/v2/dashboards")
 PERMISSION_DATASETS = "datasets:create"
 PERMISSION_TOKENS = "apiTokens:create"
 PERMISSION_MONITORS = "monitors:create"
+PERMISSION_DASHBOARDS = "dashboards:create"
 
 # What `hermes axiom alerts` and a dashboard need beyond writing telemetry.
 ALERTING_CAPABILITIES = {
@@ -174,6 +175,15 @@ class ControlPlane:
             spec,
             operation=f"creating monitor {spec.get('name', '')!r}",
             permission=PERMISSION_MONITORS,
+        )
+        return result if isinstance(result, dict) else {}
+
+    def create_dashboard(self, document: dict[str, Any]) -> dict[str, Any]:
+        result = self._post(
+            "/v2/dashboards",
+            {"dashboard": document},
+            operation=f"creating dashboard {document.get('name', '')!r}",
+            permission=PERMISSION_DASHBOARDS,
         )
         return result if isinstance(result, dict) else {}
 

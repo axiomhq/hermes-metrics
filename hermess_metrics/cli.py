@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from . import alerts
+from . import alerts, dashboard
 from .config import Config
 from .control_plane import (
     DEFAULT_DOMAIN,
@@ -58,6 +58,8 @@ def build_parser(parser: argparse.ArgumentParser) -> None:
     setup.add_argument("--domain", default=DEFAULT_DOMAIN, help="Axiom API host")
     setup.add_argument("--region", help="Edge deployment for a new org")
     setup.add_argument("--env-file", help="Where to write settings")
+    setup.add_argument("--no-alerts", action="store_true", help="Skip creating the monitors")
+    setup.add_argument("--no-dashboard", action="store_true", help="Skip creating the dashboard")
     actions.add_parser("status", help="Show what the plugin is configured to do")
     alerts_cmd = actions.add_parser("alerts", help="Create the monitor pack in your org")
     alerts_cmd.add_argument("--token", help="API token that can create monitors")
@@ -69,6 +71,11 @@ def build_parser(parser: argparse.ArgumentParser) -> None:
     alerts_cmd.add_argument(
         "--defaults", action="store_true", help="Take every default without asking"
     )
+    board = actions.add_parser("dashboard", help="Create the bundled dashboard in your org")
+    board.add_argument("--token", help="API token that can create dashboards")
+    board.add_argument("--org", default="", help="Org id, if your token is not org-scoped")
+    board.add_argument("--domain", default=DEFAULT_DOMAIN, help="Axiom API host")
+    board.add_argument("--name", default="", help="Override the dashboard name")
 
 
 def register_cli(ctx: Any) -> None:
@@ -87,6 +94,8 @@ def handle(args: argparse.Namespace) -> int:
         return run_status()
     if action == "alerts":
         return run_alerts(args)
+    if action == "dashboard":
+        return run_dashboard(args)
     return run_setup(args)
 
 
@@ -128,6 +137,36 @@ def _budgets(ask: Callable[[str], str], args: argparse.Namespace) -> alerts.Budg
             asked = True
         chosen[field_name] = _number(ask(f"{question} [{fmt.format(default)}]: "), default)
     return alerts.Budgets(**chosen)
+
+
+def run_dashboard(args: argparse.Namespace, out: Callable[[str], None] = print) -> int:
+    """Create the bundled dashboard against the datasets already configured."""
+    config = Config.from_env()
+    datasets = {signal: config.dataset_for(signal) for signal in config.configured_signals}
+    if not datasets:
+        out("Nothing to chart yet; run `hermes axiom setup` first.")
+        return 1
+    absent = dashboard.missing_signals(datasets)
+    if absent:
+        out(f"The dashboard needs all three signals; {', '.join(absent)} is not configured.")
+        return 1
+    token = str(getattr(args, "token", "") or config.token)
+    plane = ControlPlane(domain=args.domain, token=token, org=str(args.org or config.org))
+    document = dashboard.document(datasets, str(args.name or ""))
+    try:
+        created = plane.create_dashboard(document)
+    except AxiomError as exc:
+        out(f"Could not create the dashboard: {exc}")
+        return 1
+    out(f"Created dashboard {document['name']!r} with {len(document['charts'])} panels.")
+    nested = created.get("dashboard")
+    body: dict[str, Any] = nested if isinstance(nested, dict) else created
+    uid = str(body.get("uid") or body.get("id") or "")
+    if uid and config.org:
+        out(f"  https://app.axiom.co/{config.org}/dashboards/{uid}")
+    elif uid:
+        out(f"  {uid}")
+    return 0
 
 
 def run_alerts(
@@ -206,7 +245,34 @@ def run_setup(
     target = Path(args.env_file) if args.env_file else hermes_home() / ENV_FILENAME
     write_env(target, env_values(result))
     _report(result, target, out)
+    _extras(args, result, out)
+    _claim(result, out)
     return 0
+
+
+def _extras(args: argparse.Namespace, result: Provisioned, out: Callable[[str], None]) -> None:
+    """Create the monitors and the dashboard with the token setup just persisted."""
+    plane = ControlPlane(domain=result.domain, token=result.token, org=result.org_id)
+    if not getattr(args, "no_alerts", False):
+        report = alerts.create(plane, result.datasets)
+        if report.created:
+            out(f"  monitors {len(report.created)} created")
+        if report.failed:
+            out(f"  monitors skipped: {report.failed[0][1][:70]}")
+    if getattr(args, "no_dashboard", False) or dashboard.missing_signals(result.datasets):
+        return
+    document = dashboard.document(result.datasets)
+    try:
+        created = plane.create_dashboard(document)
+    except AxiomError as exc:
+        out(f"  dashboard skipped: {exc.message[:70]}")
+        return
+    nested = created.get("dashboard")
+    body: dict[str, Any] = nested if isinstance(nested, dict) else created
+    uid = str(body.get("uid") or body.get("id") or "")
+    out(f"  dashboard {len(document['charts'])} panels")
+    if uid and result.org_id:
+        out(f"  https://app.axiom.co/{result.org_id}/dashboards/{uid}")
 
 
 TOKEN_SETTINGS_URL = "https://app.axiom.co/settings/api-tokens"
@@ -272,11 +338,15 @@ def _report(result: Provisioned, target: Path, out: Callable[[str], None]) -> No
         out("")
         out("The saved token can write telemetry but not read it back, because the")
         out("token you supplied cannot grant query access on these datasets.")
-    if result.needs_claim:
-        out("")
-        out("Claim the org to keep this data and let alerts fire:")
-        out(f"  {result.claim_url}")
-        out(f"It is deleted after {result.expires_at} if nobody does.")
+
+
+def _claim(result: Provisioned, out: Callable[[str], None]) -> None:
+    if not result.needs_claim:
+        return
+    out("")
+    out("Claim the org to keep this data and let the monitors fire:")
+    out(f"  {result.claim_url}")
+    out(f"It is deleted after {result.expires_at} if nobody does.")
 
 
 def run_status(out: Callable[[str], None] = print) -> int:

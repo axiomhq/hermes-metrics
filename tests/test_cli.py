@@ -27,14 +27,16 @@ ORG = {
 class _Handler(BaseHTTPRequestHandler):
     seen: list[dict[str, Any]] = []
     fail: bool = False
+    script: dict[str, tuple[int, Any]] = {}
 
     def do_POST(self) -> None:  # noqa: N802
         length = int(self.headers.get("Content-Length") or 0)
         body = json.loads(self.rfile.read(length).decode()) if length else None
         type(self).seen.append({"path": self.path, "body": body})
-        if type(self).fail:
-            payload: Any = {"message": "nope"}
-            status = 403
+        if self.path in type(self).script:
+            payload, status = type(self).script[self.path][1], type(self).script[self.path][0]
+        elif type(self).fail:
+            payload, status = {"message": "nope"}, 403
         elif self.path == "/v2/orgs/provision":
             payload, status = ORG, 200
         elif self.path == "/v2/datasets":
@@ -55,6 +57,7 @@ class _Handler(BaseHTTPRequestHandler):
 def server():
     _Handler.seen = []
     _Handler.fail = False
+    _Handler.script = {}
     httpd = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
     yield f"127.0.0.1:{httpd.server_port}", _Handler
@@ -71,6 +74,8 @@ def _args(host: str, target: Path, **overrides: Any) -> argparse.Namespace:
         "region": None,
         "org": "",
         "env_file": str(target),
+        "no_alerts": True,
+        "no_dashboard": True,
     }
     values.update(overrides)
     return argparse.Namespace(**values)
@@ -684,3 +689,155 @@ def test_the_chosen_budget_reaches_the_monitor(monkeypatch) -> None:
     assert by_name["Hermes token use is high"]["threshold"] == 123
     assert "123" in by_name["Hermes token use is high"]["description"]
     assert by_name["Hermes spend is high"]["threshold"] == 4.5
+
+
+def _dash_args(host: str, **overrides: Any) -> argparse.Namespace:
+    values: dict[str, Any] = {
+        "axiom_action": "dashboard",
+        "token": None,
+        "org": "",
+        "domain": host,
+        "name": "",
+    }
+    values.update(overrides)
+    return argparse.Namespace(**values)
+
+
+def test_dashboard_without_setup_says_so(monkeypatch) -> None:
+    for name in (
+        "HERMES_AXIOM_TRACES_DATASET",
+        "HERMES_AXIOM_LOGS_DATASET",
+        "HERMES_AXIOM_METRICS_DATASET",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    out = _Recorder()
+    assert cli.run_dashboard(_dash_args("x"), out=out) == 1
+    assert "setup" in out.lines[0]
+
+
+def test_dashboard_needs_all_three_signals(monkeypatch) -> None:
+    monkeypatch.setenv("HERMES_AXIOM_TOKEN", "xaat-1")
+    monkeypatch.setenv("HERMES_AXIOM_METRICS_DATASET", "m")
+    for name in ("HERMES_AXIOM_TRACES_DATASET", "HERMES_AXIOM_LOGS_DATASET"):
+        monkeypatch.delenv(name, raising=False)
+    out = _Recorder()
+    assert cli.run_dashboard(_dash_args("x"), out=out) == 1
+    assert "traces" in out.lines[0] and "logs" in out.lines[0]
+
+
+def _configured(monkeypatch: Any) -> None:
+    monkeypatch.setenv("HERMES_AXIOM_TOKEN", "xaat-1")
+    monkeypatch.setenv("HERMES_AXIOM_METRICS_DATASET", "m")
+    monkeypatch.setenv("HERMES_AXIOM_TRACES_DATASET", "t")
+    monkeypatch.setenv("HERMES_AXIOM_LOGS_DATASET", "l")
+    monkeypatch.setenv("HERMES_AXIOM_ORG", "org-1")
+
+
+def test_dashboard_reports_the_link(server, monkeypatch) -> None:
+    host, handler = server
+    handler.script["/v2/dashboards"] = (200, {"dashboard": {"uid": "abc123"}})
+    _plain_http(monkeypatch)
+    _configured(monkeypatch)
+    out = _Recorder()
+    assert cli.run_dashboard(_dash_args(host), out=out) == 0
+    joined = "\n".join(out.lines)
+    assert "panels" in joined
+    assert "app.axiom.co/org-1/dashboards/abc123" in joined
+
+
+def test_dashboard_substitutes_this_installs_datasets(server, monkeypatch) -> None:
+    host, handler = server
+    handler.script["/v2/dashboards"] = (200, {"dashboard": {"uid": "abc"}})
+    _plain_http(monkeypatch)
+    _configured(monkeypatch)
+    cli.run_dashboard(_dash_args(host), out=_Recorder())
+    sent = json.dumps(handler.seen[0]["body"])
+    assert "{{" not in sent
+    assert "`m`:" in sent
+
+
+def test_a_refused_dashboard_is_reported(server, monkeypatch) -> None:
+    host, handler = server
+    handler.script["/v2/dashboards"] = (403, {"message": "nope"})
+    _plain_http(monkeypatch)
+    _configured(monkeypatch)
+    out = _Recorder()
+    assert cli.run_dashboard(_dash_args(host), out=out) == 1
+    assert "Could not create" in out.lines[0]
+
+
+def test_handle_routes_to_dashboard(monkeypatch) -> None:
+    for name in (
+        "HERMES_AXIOM_TRACES_DATASET",
+        "HERMES_AXIOM_LOGS_DATASET",
+        "HERMES_AXIOM_METRICS_DATASET",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    assert cli.handle(_dash_args("x")) == 1
+
+
+def test_dashboard_reports_a_bare_id_without_an_org(server, monkeypatch) -> None:
+    host, handler = server
+    handler.script["/v2/dashboards"] = (200, {"id": "bare-id"})
+    _plain_http(monkeypatch)
+    _configured(monkeypatch)
+    monkeypatch.delenv("HERMES_AXIOM_ORG", raising=False)
+    out = _Recorder()
+    assert cli.run_dashboard(_dash_args(host), out=out) == 0
+    assert any(line.strip() == "bare-id" for line in out.lines)
+
+
+def _full_setup_args(host: str, target: Path, **overrides: Any) -> argparse.Namespace:
+    args = _args(host, target, provision=True, **overrides)
+    args.no_alerts = False
+    args.no_dashboard = False
+    return args
+
+
+def test_setup_also_creates_the_monitors_and_the_dashboard(server, tmp_path, monkeypatch) -> None:
+    """One command, no follow-up."""
+    host, handler = server
+    handler.script["/v2/monitors"] = (200, {"id": "m"})
+    handler.script["/v2/dashboards"] = (200, {"dashboard": {"uid": "board-1"}})
+    _plain_http(monkeypatch)
+    out = _Recorder()
+    assert cli.run_setup(_full_setup_args(host, tmp_path / ".env"), ask=_never, out=out) == 0
+    joined = "\n".join(out.lines)
+    assert "monitors 7 created" in joined
+    assert "dashboard 24 panels" in joined
+    assert "dashboards/board-1" in joined
+    assert "Claim the org" in joined
+
+
+def test_setup_survives_a_token_that_cannot_alert(server, tmp_path, monkeypatch) -> None:
+    host, handler = server
+    handler.script["/v2/monitors"] = (403, {"message": "no monitors for you"})
+    handler.script["/v2/dashboards"] = (403, {"message": "no dashboards either"})
+    _plain_http(monkeypatch)
+    out = _Recorder()
+    assert cli.run_setup(_full_setup_args(host, tmp_path / ".env"), ask=_never, out=out) == 0
+    joined = "\n".join(out.lines)
+    assert "monitors skipped" in joined
+    assert "dashboard skipped" in joined
+    assert "Axiom telemetry is configured" in joined
+
+
+def test_setup_extras_can_be_skipped(server, tmp_path, monkeypatch) -> None:
+    host, handler = server
+    _plain_http(monkeypatch)
+    out = _Recorder()
+    cli.run_setup(_args(host, tmp_path / ".env", provision=True), ask=_never, out=out)
+    paths = [r["path"] for r in handler.seen]
+    assert "/v2/monitors" not in paths
+    assert "/v2/dashboards" not in paths
+
+
+def test_setup_uses_the_token_it_persisted(server, tmp_path, monkeypatch) -> None:
+    """Whatever setup proves here is what the operator is left holding."""
+    host, handler = server
+    handler.script["/v2/monitors"] = (200, {"id": "m"})
+    handler.script["/v2/dashboards"] = (200, {"dashboard": {"uid": "b"}})
+    _plain_http(monkeypatch)
+    cli.run_setup(_full_setup_args(host, tmp_path / ".env"), ask=_never, out=_Recorder())
+    written = (tmp_path / ".env").read_text()
+    assert "HERMES_AXIOM_TOKEN=xaat-scoped" in written
