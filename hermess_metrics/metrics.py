@@ -81,6 +81,21 @@ class MetricRecorder:
             unit="{session}",
             description="Sessions by outcome",
         )
+        self._context = meter.create_histogram(
+            "hermes.gen_ai.context_tokens",
+            unit="{token}",
+            description="Prompt size sent to the provider",
+        )
+        self._retry_depth = meter.create_histogram(
+            "hermes.gen_ai.retry_depth",
+            unit="{retry}",
+            description="Retry attempt a provider call failed on",
+        )
+        self._exhausted = meter.create_counter(
+            "hermes.gen_ai.retries_exhausted",
+            unit="{request}",
+            description="Provider calls that ran out of retries",
+        )
 
     def handle(self, event: Any) -> None:
         if not isinstance(event, Event):
@@ -120,6 +135,9 @@ class MetricRecorder:
         usage = payload.get("usage")
         if not isinstance(usage, Mapping):
             return
+        prompt_tokens = usage.get("prompt_tokens")
+        if isinstance(prompt_tokens, int):
+            self._context.record(prompt_tokens, dimensions)
         for source, label in _TOKEN_BUCKETS:
             count = usage.get(source)
             if isinstance(count, int) and count:
@@ -137,6 +155,12 @@ class MetricRecorder:
         if isinstance(status_code, int):
             attributes["http.response.status_code"] = status_code
         self._requests.add(1, attributes)
+        retry_count = payload.get("retry_count")
+        if isinstance(retry_count, int):
+            self._retry_depth.record(retry_count, dimensions)
+            max_retries = payload.get("max_retries")
+            if isinstance(max_retries, int) and retry_count >= max_retries:
+                self._exhausted.add(1, {**dimensions, "error.type": _text(payload, "reason")})
 
     def _tool_call(self, payload: Mapping[str, Any]) -> None:
         duration_ms = payload.get("duration_ms")

@@ -322,3 +322,69 @@ def test_an_event_kind_this_recorder_does_not_consume_is_ignored(recorder_and_re
     assert dispatcher.submit(stamp("session_start", {"session_id": SESSION}))
     assert dispatcher.flush(FLUSH)
     assert dispatcher.stats().failed == 0
+
+
+def test_prompt_size_is_recorded(recorder_and_reader) -> None:
+    recorder, reader, dispatcher = recorder_and_reader
+    payload = _api_request()
+    payload["usage"] = dict(payload["usage"], prompt_tokens=110)
+    send(dispatcher, "api_request", **payload)
+    assert dispatcher.flush(FLUSH)
+    point = _points(reader)["hermes.gen_ai.context_tokens"][0]
+    assert point.sum == 110
+    assert point.attributes["gen_ai.request.model"] == "claude-opus-5"
+
+
+def test_a_usage_without_a_prompt_total_records_no_context(recorder_and_reader) -> None:
+    recorder, reader, dispatcher = recorder_and_reader
+    send(dispatcher, "api_request", **_api_request())
+    assert dispatcher.flush(FLUSH)
+    assert "hermes.gen_ai.context_tokens" not in _points(reader)
+
+
+def _error(**overrides: Any) -> dict[str, Any]:
+    now = time.time()
+    payload: dict[str, Any] = {
+        "provider": "anthropic",
+        "model": "anthropic/claude-opus-5",
+        "response_model": "claude-opus-5",
+        "platform": "cli",
+        "started_at": now,
+        "ended_at": now + 0.05,
+        "reason": "overloaded",
+        "status_code": 529,
+        "retry_count": 2,
+        "max_retries": 3,
+    }
+    payload.update(overrides)
+    return payload
+
+
+def test_the_retry_attempt_is_recorded(recorder_and_reader) -> None:
+    recorder, reader, dispatcher = recorder_and_reader
+    send(dispatcher, "api_error", **_error())
+    assert dispatcher.flush(FLUSH)
+    assert _points(reader)["hermes.gen_ai.retry_depth"][0].sum == 2
+
+
+def test_running_out_of_retries_is_counted(recorder_and_reader) -> None:
+    recorder, reader, dispatcher = recorder_and_reader
+    send(dispatcher, "api_error", **_error(retry_count=3, max_retries=3))
+    assert dispatcher.flush(FLUSH)
+    point = _points(reader)["hermes.gen_ai.retries_exhausted"][0]
+    assert point.value == 1
+    assert point.attributes["error.type"] == "overloaded"
+
+
+def test_a_failure_with_retries_left_is_not_exhausted(recorder_and_reader) -> None:
+    recorder, reader, dispatcher = recorder_and_reader
+    send(dispatcher, "api_error", **_error(retry_count=1, max_retries=3))
+    assert dispatcher.flush(FLUSH)
+    assert "hermes.gen_ai.retries_exhausted" not in _points(reader)
+
+
+def test_an_error_without_retry_fields_records_no_depth(recorder_and_reader) -> None:
+    recorder, reader, dispatcher = recorder_and_reader
+    send(dispatcher, "api_error", **_error(retry_count=None, max_retries=None))
+    assert dispatcher.flush(FLUSH)
+    assert "hermes.gen_ai.retry_depth" not in _points(reader)
