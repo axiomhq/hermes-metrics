@@ -1,4 +1,4 @@
-"""Environment-backed configuration.
+"""Environment-backed configuration and per-signal destinations.
 
 Hermes 0.19 hands plugins a context without a config accessor, so settings
 arrive through the process environment, which ``~/.hermes/.env`` populates.
@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 ENV_PREFIX = "HERMES_AXIOM_"
 
@@ -17,9 +17,26 @@ ENV_DOMAIN = ENV_PREFIX + "DOMAIN"
 ENV_TRACES_DATASET = ENV_PREFIX + "TRACES_DATASET"
 ENV_LOGS_DATASET = ENV_PREFIX + "LOGS_DATASET"
 ENV_METRICS_DATASET = ENV_PREFIX + "METRICS_DATASET"
+ENV_SERVICE_NAME = ENV_PREFIX + "SERVICE_NAME"
 ENV_DEBUG = ENV_PREFIX + "DEBUG"
 
 DEFAULT_DOMAIN = "api.axiom.co"
+DEFAULT_SERVICE_NAME = "hermes"
+
+SIGNAL_TRACES = "traces"
+SIGNAL_LOGS = "logs"
+SIGNAL_METRICS = "metrics"
+SIGNALS = (SIGNAL_TRACES, SIGNAL_LOGS, SIGNAL_METRICS)
+
+# Axiom reads the destination dataset from the signal's own header and falls
+# back to the generic one, so naming only the specific header keeps each
+# signal pinned to its own dataset.
+DATASET_HEADERS = {
+    SIGNAL_TRACES: "x-axiom-traces-dataset",
+    SIGNAL_LOGS: "x-axiom-logs-dataset",
+    SIGNAL_METRICS: "x-axiom-metrics-dataset",
+}
+GENERIC_DATASET_HEADER = "x-axiom-dataset"
 
 _TRUTHY = frozenset({"1", "true", "yes", "on"})
 _SCHEMES = ("https://", "http://")
@@ -39,14 +56,24 @@ def _host(raw: str) -> str:
 
 
 @dataclass(frozen=True)
+class Endpoint:
+    """Where one signal goes and what it must present on arrival."""
+
+    signal: str
+    url: str
+    headers: dict[str, str] = field(repr=False)
+
+
+@dataclass(frozen=True)
 class Config:
     """Resolved plugin settings and the posture they imply."""
 
-    token: str = ""
+    token: str = field(default="", repr=False)
     domain: str = DEFAULT_DOMAIN
     traces_dataset: str = ""
     logs_dataset: str = ""
     metrics_dataset: str = ""
+    service_name: str = DEFAULT_SERVICE_NAME
     debug: bool = False
 
     @staticmethod
@@ -58,6 +85,7 @@ class Config:
                 ENV_TRACES_DATASET,
                 ENV_LOGS_DATASET,
                 ENV_METRICS_DATASET,
+                ENV_SERVICE_NAME,
                 ENV_DEBUG,
             }
         )
@@ -71,18 +99,37 @@ class Config:
             traces_dataset=_text(source, ENV_TRACES_DATASET),
             logs_dataset=_text(source, ENV_LOGS_DATASET),
             metrics_dataset=_text(source, ENV_METRICS_DATASET),
+            service_name=_text(source, ENV_SERVICE_NAME) or DEFAULT_SERVICE_NAME,
             debug=_text(source, ENV_DEBUG).lower() in _TRUTHY,
         )
+
+    def dataset_for(self, signal: str) -> str:
+        return {
+            SIGNAL_TRACES: self.traces_dataset,
+            SIGNAL_LOGS: self.logs_dataset,
+            SIGNAL_METRICS: self.metrics_dataset,
+        }.get(signal, "")
 
     @property
     def configured_signals(self) -> tuple[str, ...]:
         """Signal names whose destination dataset is known."""
-        pairs = (
-            ("traces", self.traces_dataset),
-            ("logs", self.logs_dataset),
-            ("metrics", self.metrics_dataset),
+        return tuple(signal for signal in SIGNALS if self.dataset_for(signal))
+
+    def endpoints(self) -> tuple[Endpoint, ...]:
+        """One destination per configured signal."""
+        if not self.active:
+            return ()
+        return tuple(
+            Endpoint(
+                signal=signal,
+                url=f"https://{self.domain}/v1/{signal}",
+                headers={
+                    "authorization": f"Bearer {self.token}",
+                    DATASET_HEADERS[signal]: self.dataset_for(signal),
+                },
+            )
+            for signal in self.configured_signals
         )
-        return tuple(name for name, dataset in pairs if dataset)
 
     def problems(self) -> tuple[str, ...]:
         """Reasons the plugin cannot ship telemetry, in the order to fix them."""
