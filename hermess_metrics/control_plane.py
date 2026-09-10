@@ -28,10 +28,15 @@ logger = logging.getLogger(__name__)
 class AxiomError(RuntimeError):
     """A control-plane call that did not succeed."""
 
-    def __init__(self, status: int, message: str) -> None:
+    def __init__(self, status: int, message: str, resets_at: int | None = None) -> None:
         super().__init__(f"axiom returned {status}: {message}")
         self.status = status
         self.message = message
+        self.resets_at = resets_at
+
+    @property
+    def seconds_until_reset(self) -> float:
+        return max(0.0, self.resets_at - time.time()) if self.resets_at else 0.0
 
 
 @dataclass(frozen=True)
@@ -108,7 +113,7 @@ class ControlPlane:
                 return self._once(url, data, headers)
             except AxiomError as exc:
                 last = exc
-                if exc.status not in RETRY_STATUS:
+                if exc.status not in RETRY_STATUS or _resets_beyond_backoff(exc, self.backoff):
                     raise
             if attempt + 1 < MAX_ATTEMPTS and self.backoff:
                 time.sleep(self.backoff * (2**attempt))
@@ -120,13 +125,26 @@ class ControlPlane:
             with urllib.request.urlopen(request, timeout=self.timeout) as response:
                 raw = response.read().decode() or "{}"
         except urllib.error.HTTPError as exc:
-            raise AxiomError(exc.code, _message(exc.read())) from exc
+            raise AxiomError(exc.code, _message(exc.read()), _resets_at(exc.headers)) from exc
         except OSError as exc:
             raise AxiomError(0, str(exc)) from exc
         try:
             return json.loads(raw)
         except ValueError as exc:
             raise AxiomError(200, "response was not json") from exc
+
+
+def _resets_at(headers: Any) -> int | None:
+    try:
+        return int(headers.get("x-ratelimit-reset") or 0) or None
+    except (AttributeError, TypeError, ValueError):
+        return None
+
+
+def _resets_beyond_backoff(error: AxiomError, backoff: float) -> bool:
+    """Retrying inside this call cannot outlast a window that resets much later."""
+    budget = backoff * (2**MAX_ATTEMPTS)
+    return bool(error.seconds_until_reset > max(budget, 1.0))
 
 
 def _message(raw: bytes) -> str:

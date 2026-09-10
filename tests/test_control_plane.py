@@ -216,3 +216,72 @@ def test_backoff_is_applied_between_attempts(server, monkeypatch: pytest.MonkeyP
         "x", DATASET_KINDS["logs"]
     )
     assert slept == [0.25]
+
+
+class _LimitHandler(BaseHTTPRequestHandler):
+    resets_at: int = 0
+    seen: list[str] = []
+
+    def do_POST(self) -> None:  # noqa: N802
+        type(self).seen.append(self.path)
+        self.send_response(429)
+        if type(self).resets_at:
+            self.send_header("x-ratelimit-limit", "3")
+            self.send_header("x-ratelimit-remaining", "0")
+            self.send_header("x-ratelimit-reset", str(type(self).resets_at))
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
+    def log_message(self, *args: Any) -> None:
+        return
+
+
+@pytest.fixture
+def limited():
+    _LimitHandler.seen = []
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), _LimitHandler)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    yield f"127.0.0.1:{httpd.server_port}", _LimitHandler
+    httpd.shutdown()
+
+
+def test_a_far_off_rate_limit_is_not_retried(limited) -> None:
+    import time as _time
+
+    host, handler = limited
+    handler.resets_at = int(_time.time()) + 3600
+    with pytest.raises(AxiomError) as caught:
+        _plane(host).provision_org()
+    assert len(handler.seen) == 1
+    assert caught.value.status == 429
+    assert 3500 < caught.value.seconds_until_reset <= 3600
+
+
+def test_a_rate_limit_without_headers_is_still_retried(limited) -> None:
+    host, handler = limited
+    handler.resets_at = 0
+    with pytest.raises(AxiomError) as caught:
+        _plane(host).provision_org()
+    assert len(handler.seen) == 3
+    assert caught.value.seconds_until_reset == 0.0
+
+
+def test_an_imminent_rate_limit_is_retried(limited) -> None:
+    import time as _time
+
+    host, handler = limited
+    handler.resets_at = int(_time.time())
+    with pytest.raises(AxiomError):
+        _plane(host).provision_org()
+    assert len(handler.seen) == 3
+
+
+def test_an_unreadable_rate_limit_header_is_ignored() -> None:
+    from hermess_metrics.control_plane import _resets_at
+
+    class Headers:
+        def get(self, name: str) -> str:
+            return "not-a-number"
+
+    assert _resets_at(Headers()) is None
+    assert _resets_at(None) is None

@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import logging
 from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -93,13 +94,28 @@ def run_setup(
     try:
         result = provision(plane, prefix=args.prefix, region=args.region, org_token=org_token)
     except AxiomError as exc:
-        out(f"Setup failed: {exc}")
+        for line in _explain(exc, org_token):
+            out(line)
         return 1
 
     target = Path(args.env_file) if args.env_file else hermes_home() / ENV_FILENAME
     write_env(target, env_values(result))
     _report(result, target, out)
     return 0
+
+
+def _explain(exc: AxiomError, org_token: str | None) -> list[str]:
+    """Turn an API failure into something the operator can act on."""
+    if exc.status != 429 or org_token:
+        return [f"Setup failed: {exc}"]
+    lines = ["Setup failed: Axiom is rate limiting new orgs from this address."]
+    if exc.seconds_until_reset:
+        when = datetime.fromtimestamp(exc.resets_at or 0, tz=UTC)
+        hours = exc.seconds_until_reset / 3600
+        lines.append(f"  The limit resets at {when:%Y-%m-%d %H:%M} UTC, in about {hours:.0f}h.")
+    lines.append("  To set up now, use an Axiom org you already have:")
+    lines.append("    hermes axiom setup --token <your-api-token>")
+    return lines
 
 
 def _report(result: Provisioned, target: Path, out: Callable[[str], None]) -> None:

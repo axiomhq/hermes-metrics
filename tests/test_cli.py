@@ -257,3 +257,64 @@ def test_handle_routes_to_setup(server, tmp_path, monkeypatch) -> None:
     monkeypatch.setattr("builtins.input", _never)
     assert cli.handle(_args(host, tmp_path / ".env", provision=True)) == 0
     assert handler.seen[0]["path"] == "/v2/orgs/provision"
+
+
+class _LimitedHandler(BaseHTTPRequestHandler):
+    resets_at: int = 0
+
+    def do_POST(self) -> None:  # noqa: N802
+        self.send_response(429)
+        if type(self).resets_at:
+            self.send_header("x-ratelimit-reset", str(type(self).resets_at))
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
+    def log_message(self, *args: Any) -> None:
+        return
+
+
+@pytest.fixture
+def limited_server():
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), _LimitedHandler)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    yield f"127.0.0.1:{httpd.server_port}"
+    httpd.shutdown()
+
+
+def test_a_rate_limited_provision_explains_itself(limited_server, tmp_path, monkeypatch) -> None:
+    import time as _time
+
+    _LimitedHandler.resets_at = int(_time.time()) + 7200
+    _plain_http(monkeypatch)
+    out = _Recorder()
+    code = cli.run_setup(
+        _args(limited_server, tmp_path / ".env", provision=True), ask=_never, out=out
+    )
+    assert code == 1
+    joined = "\n".join(out.lines)
+    assert "rate limiting" in joined
+    assert "UTC" in joined
+    assert "--token" in joined
+
+
+def test_a_rate_limit_without_a_reset_still_suggests_the_alternative(
+    limited_server, tmp_path, monkeypatch
+) -> None:
+    _LimitedHandler.resets_at = 0
+    _plain_http(monkeypatch)
+    out = _Recorder()
+    cli.run_setup(_args(limited_server, tmp_path / ".env", provision=True), ask=_never, out=out)
+    joined = "\n".join(out.lines)
+    assert "--token" in joined
+    assert "resets at" not in joined
+
+
+def test_a_rate_limit_while_adopting_is_reported_plainly(
+    limited_server, tmp_path, monkeypatch
+) -> None:
+    _LimitedHandler.resets_at = 0
+    _plain_http(monkeypatch)
+    out = _Recorder()
+    cli.run_setup(_args(limited_server, tmp_path / ".env", token="xaat-mine"), ask=_never, out=out)
+    assert out.lines[0].startswith("Setup failed:")
+    assert "--token" not in "\n".join(out.lines)
