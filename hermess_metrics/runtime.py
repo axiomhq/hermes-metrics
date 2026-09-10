@@ -13,11 +13,14 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
+from .approvals import ApprovalRecorder
 from .config import SIGNAL_LOGS, SIGNAL_METRICS, SIGNAL_TRACES, Config
 from .dispatch import Dispatcher
 from .events import (
     KIND_API_ERROR,
     KIND_API_REQUEST,
+    KIND_APPROVAL_REQUEST,
+    KIND_APPROVAL_RESPONSE,
     KIND_DIAGNOSTIC,
     KIND_SESSION_END,
     KIND_SESSION_START,
@@ -49,6 +52,8 @@ HOOK_KINDS = {
     "post_api_request": KIND_API_REQUEST,
     "api_request_error": KIND_API_ERROR,
     "post_tool_call": KIND_TOOL_CALL,
+    "pre_approval_request": KIND_APPROVAL_REQUEST,
+    "post_approval_response": KIND_APPROVAL_RESPONSE,
 }
 FLUSH_HOOK = "on_session_finalize"
 SHUTDOWN_TIMEOUT = 5.0
@@ -100,6 +105,7 @@ class Runtime:
             recorders.append(PriceRecorder(meter))
             recorders.append(ToolInventory(meter))
             recorders.append(SkillInventory(meter))
+            recorders.append(ApprovalRecorder(meter))
             HealthMetrics(meter, dispatcher)
 
         if SIGNAL_LOGS in transport.exporters:
