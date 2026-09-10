@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import threading
+import time
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any
@@ -14,6 +16,17 @@ from .events import KIND_API_ERROR, KIND_API_REQUEST, Event
 
 MAX_TRACKED_MODELS = 64
 PRICED_ROUTES = frozenset({"official_docs_snapshot", "subscription_included"})
+# Hermes prices these from a models API, cached for an hour, so the lookup runs
+# off-thread and charging starts once it lands.
+FETCHED_ROUTES = frozenset({"official_models_api"})
+# Hermes caches the models API for an hour, so re-reading at that cadence
+# catches a rate change without adding fetches.
+PRICE_TTL_SECONDS = 3600.0
+
+
+def _fetchable(model: str, provider: str) -> bool:
+    return billing_mode(model, provider, "") in FETCHED_ROUTES
+
 
 # Reasoning tokens are already inside output_tokens, so charging them again would double count.
 _BILLED = (
@@ -52,9 +65,13 @@ def _entry_for(model: str, provider: str) -> Any:
 
 
 def resolve(model: str, provider: str) -> Rates | None:
-    """Look up a route's rates, or ``None`` when they are not free to obtain."""
+    """Look up a route's rates from data already on hand."""
     if billing_mode(model, provider, "") not in PRICED_ROUTES:
         return None
+    return _lookup(model, provider)
+
+
+def _lookup(model: str, provider: str) -> Rates | None:
     try:
         entry = _entry_for(model, provider)
     except Exception:
@@ -80,14 +97,23 @@ def resolve(model: str, provider: str) -> Rates | None:
 class PriceRecorder:
     """Publishes rates for every model this process has actually called."""
 
-    def __init__(self, meter: Meter, max_tracked: int = MAX_TRACKED_MODELS) -> None:
+    def __init__(
+        self,
+        meter: Meter,
+        max_tracked: int = MAX_TRACKED_MODELS,
+        ttl_seconds: float = PRICE_TTL_SECONDS,
+    ) -> None:
         self._max_tracked = max(1, max_tracked)
+        self._ttl = ttl_seconds
+        self._pending: set[tuple[str, str]] = set()
+        self._lock = threading.Lock()
         self._cost = meter.create_counter(
             "hermes.gen_ai.cost",
             unit="USD",
             description="Spend, from the published rate for the model",
         )
         self._rates: dict[tuple[str, str], Rates] = {}
+        self._resolved_at: dict[tuple[str, str], float] = {}
         self._skipped: set[tuple[str, str]] = set()
         for name, _ in _RATE_FIELDS:
             meter.create_observable_gauge(
@@ -111,18 +137,53 @@ class PriceRecorder:
             return
         key = (provider, model)
         if key in self._rates:
+            if self._is_stale(key):
+                self._resolve_later(key)
             self._charge(self._rates[key], payload)
             return
-        if key in self._skipped:
-            return
-        if len(self._rates) >= self._max_tracked:
+        if key in self._skipped or len(self._rates) >= self._max_tracked:
             return
         rates = resolve(model, provider)
         if rates is None:
-            self._skipped.add(key)
+            if billing_mode(model, provider, "") in FETCHED_ROUTES:
+                self._resolve_later(key)
+            else:
+                self._skipped.add(key)
             return
-        self._rates[key] = rates
+        self._remember(key, rates)
         self._charge(rates, payload)
+
+    def _is_stale(self, key: tuple[str, str]) -> bool:
+        return time.time() - self._resolved_at.get(key, 0.0) >= self._ttl
+
+    def _remember(self, key: tuple[str, str], rates: Rates) -> None:
+        self._rates[key] = rates
+        self._resolved_at[key] = time.time()
+
+    def _resolve_later(self, key: tuple[str, str]) -> None:
+        """Re-read a rate on its own thread; the current one keeps charging meanwhile."""
+        with self._lock:
+            if key in self._pending:
+                return
+            self._pending.add(key)
+        provider, model = key
+        thread = threading.Thread(
+            target=self._fetch, args=(key, model, provider), name="hermess-pricing", daemon=True
+        )
+        thread.start()
+
+    def _fetch(self, key: tuple[str, str], model: str, provider: str) -> None:
+        rates = (
+            _lookup(model, provider) if _fetchable(model, provider) else resolve(model, provider)
+        )
+        with self._lock:
+            self._pending.discard(key)
+            if rates is None:
+                if key not in self._rates:
+                    self._skipped.add(key)
+                self._resolved_at[key] = time.time()
+            elif key in self._rates or len(self._rates) < self._max_tracked:
+                self._remember(key, rates)
 
     def _charge(self, rates: Rates, payload: Mapping[str, Any]) -> None:
         usage = payload.get("usage")

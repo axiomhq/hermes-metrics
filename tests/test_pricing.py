@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import threading
+import time
 from typing import Any
 
 import pytest
@@ -73,10 +75,64 @@ def test_a_subscription_included_route_is_priced_at_zero(recorder_and_reader) ->
     assert points["hermes.gen_ai.output_token_cost"][0].value == 0.0
 
 
-def test_a_route_needing_a_network_lookup_is_skipped(recorder_and_reader) -> None:
+def test_a_models_api_route_is_resolved_off_thread(recorder_and_reader, monkeypatch) -> None:
+    """OpenRouter rates come from a fetch, so they must never block the export path."""
+    from hermess_metrics import pricing
+
+    started = threading.Event()
+    release = threading.Event()
+
+    def slow_lookup(model: str, provider: str) -> Any:
+        started.set()
+        release.wait(5.0)
+        return pricing.Rates(
+            provider=provider, model=model, version="openrouter", values={"input_token_cost": 2.0}
+        )
+
+    monkeypatch.setattr(pricing, "_lookup", slow_lookup)
     recorder, reader = recorder_and_reader
     _see(recorder, "some/model", "openrouter")
+    assert started.wait(5.0)
     assert _points(reader) == {}
+    release.set()
+    for _ in range(100):
+        if recorder.tracked:
+            break
+        time.sleep(0.02)
+    assert recorder.tracked == 1
+    _call(recorder, "some/model", "openrouter", {"input_tokens": 1_000_000})
+    assert _points(reader)["hermes.gen_ai.cost"][0].value == pytest.approx(2.0)
+
+
+def test_a_models_api_route_is_only_fetched_once(recorder_and_reader, monkeypatch) -> None:
+    from hermess_metrics import pricing
+
+    calls: list[tuple[str, str]] = []
+
+    def counting_lookup(model: str, provider: str) -> Any:
+        calls.append((model, provider))
+        time.sleep(0.05)
+        return None
+
+    monkeypatch.setattr(pricing, "_lookup", counting_lookup)
+    recorder, reader = recorder_and_reader
+    for _ in range(10):
+        _see(recorder, "some/model", "openrouter")
+    time.sleep(0.3)
+    assert len(calls) == 1
+
+
+def test_a_failed_fetch_is_not_retried_forever(recorder_and_reader, monkeypatch) -> None:
+    from hermess_metrics import pricing
+
+    calls: list[str] = []
+    monkeypatch.setattr(pricing, "_lookup", lambda model, provider: calls.append(model) or None)
+    recorder, reader = recorder_and_reader
+    _see(recorder, "some/model", "openrouter")
+    time.sleep(0.2)
+    _see(recorder, "some/model", "openrouter")
+    time.sleep(0.2)
+    assert len(calls) == 1
 
 
 def test_an_unpriced_model_publishes_nothing(recorder_and_reader) -> None:
@@ -205,3 +261,65 @@ def test_a_call_without_usage_is_not_charged(recorder_and_reader) -> None:
     recorder, reader = recorder_and_reader
     _see(recorder, MODEL, "anthropic")
     assert "hermes.gen_ai.cost" not in _points(reader)
+
+
+def test_a_stale_rate_is_refreshed_and_the_new_one_charged(monkeypatch) -> None:
+    """A rate change has to show up, or the price-rise alert can never fire."""
+    from hermess_metrics import pricing
+
+    reader = InMemoryMetricReader()
+    provider = MeterProvider(metric_readers=[reader])
+    recorder = PriceRecorder(provider.get_meter("x"), ttl_seconds=0.0)
+    versions = iter(["v1", "v2"])
+
+    def changing(model: str, provider_name: str) -> Any:
+        return pricing.Rates(
+            provider=provider_name,
+            model=model,
+            version=next(versions, "v2"),
+            values={"input_token_cost": 1.0 if provider_name == "seen" else 9.0},
+        )
+
+    monkeypatch.setattr(pricing, "resolve", changing)
+    monkeypatch.setattr(pricing, "_lookup", changing)
+    recorder.handle(stamp("api_request", {"model": "m", "provider": "openrouter"}))
+    for _ in range(100):
+        if recorder.tracked:
+            break
+        time.sleep(0.02)
+    recorder.handle(stamp("api_request", {"model": "m", "provider": "openrouter"}))
+    time.sleep(0.2)
+    point = _points(reader)["hermes.gen_ai.input_token_cost"][0]
+    assert point.attributes["hermes.pricing_version"] == "v2"
+
+
+def test_a_fresh_rate_is_not_refetched(monkeypatch) -> None:
+    from hermess_metrics import pricing
+
+    provider = MeterProvider(metric_readers=[InMemoryMetricReader()])
+    recorder = PriceRecorder(provider.get_meter("x"), ttl_seconds=3600.0)
+    recorder.handle(stamp("api_request", {"model": MODEL, "provider": "anthropic"}))
+    assert recorder.tracked == 1
+    calls: list[str] = []
+    monkeypatch.setattr(pricing, "_lookup", lambda model, p: calls.append(model) or None)
+    monkeypatch.setattr(pricing, "resolve", lambda model, p: calls.append(model) or None)
+    for _ in range(5):
+        recorder.handle(stamp("api_request", {"model": MODEL, "provider": "anthropic"}))
+    time.sleep(0.15)
+    assert calls == []
+
+
+def test_a_refresh_that_fails_keeps_the_rate_it_had(monkeypatch) -> None:
+    from hermess_metrics import pricing
+
+    reader = InMemoryMetricReader()
+    provider = MeterProvider(metric_readers=[reader])
+    recorder = PriceRecorder(provider.get_meter("x"), ttl_seconds=0.0)
+    recorder.handle(stamp("api_request", {"model": MODEL, "provider": "anthropic"}))
+    assert recorder.tracked == 1
+    monkeypatch.setattr(pricing, "resolve", lambda model, p: None)
+    monkeypatch.setattr(pricing, "_lookup", lambda model, p: None)
+    recorder.handle(stamp("api_request", {"model": MODEL, "provider": "anthropic"}))
+    time.sleep(0.2)
+    assert recorder.tracked == 1
+    assert _points(reader)["hermes.gen_ai.input_token_cost"][0].value == pytest.approx(5.0)
