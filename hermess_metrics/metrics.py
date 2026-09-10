@@ -1,0 +1,176 @@
+"""Aggregates built from Hermes observer hooks.
+
+The SDK holds one series per unique attribute combination for the life of the
+process, so every dimension here is bounded: provider, model, tool name, finish
+reason, error class and outcome. Session, turn, request and tool call
+identifiers stay on spans, which are exported and released.
+"""
+
+from __future__ import annotations
+
+import logging
+from collections.abc import Mapping
+from typing import Any
+
+from opentelemetry.metrics import Meter
+
+from .dispatch import Dispatcher
+from .events import Event, stamp
+
+# Hermes reports api_duration as a difference of two time.time() calls, so the
+# timestamps are the dependable source for elapsed seconds.
+_TOKEN_BUCKETS = (
+    ("input_tokens", "input"),
+    ("output_tokens", "output"),
+    ("cache_read_tokens", "cache_read"),
+    ("cache_write_tokens", "cache_write"),
+    ("reasoning_tokens", "reasoning"),
+)
+
+logger = logging.getLogger(__name__)
+
+
+def _model_label(payload: Mapping[str, Any]) -> str:
+    response_model = payload.get("response_model")
+    if isinstance(response_model, str) and response_model:
+        return response_model
+    model = payload.get("model")
+    if isinstance(model, str) and model:
+        return model.rsplit("/", 1)[-1]
+    return "unknown"
+
+
+def _elapsed_seconds(payload: Mapping[str, Any]) -> float:
+    started_at = payload.get("started_at")
+    ended_at = payload.get("ended_at")
+    if isinstance(started_at, (int, float)) and isinstance(ended_at, (int, float)):
+        return max(0.0, float(ended_at) - float(started_at))
+    duration = payload.get("api_duration")
+    return max(0.0, float(duration)) if isinstance(duration, (int, float)) else 0.0
+
+
+def _text(payload: Mapping[str, Any], key: str, fallback: str = "unknown") -> str:
+    value = payload.get(key)
+    return value if isinstance(value, str) and value else fallback
+
+
+class MetricRecorder:
+    """Turns hook payloads into counters and histograms."""
+
+    def __init__(self, meter: Meter, dispatcher: Dispatcher[Any]) -> None:
+        self._dispatcher = dispatcher
+        self._duration = meter.create_histogram(
+            "gen_ai.client.operation.duration",
+            unit="s",
+            description="Elapsed time of a provider API call",
+        )
+        self._tokens = meter.create_counter(
+            "gen_ai.client.token.usage",
+            unit="{token}",
+            description="Tokens consumed, split by bucket",
+        )
+        self._requests = meter.create_counter(
+            "hermes.gen_ai.requests",
+            unit="{request}",
+            description="Provider API calls by outcome",
+        )
+        self._tool_duration = meter.create_histogram(
+            "hermes.tool.duration",
+            unit="s",
+            description="Elapsed time of a tool execution",
+        )
+        self._tool_calls = meter.create_counter(
+            "hermes.tool.calls",
+            unit="{call}",
+            description="Tool executions by outcome",
+        )
+        self._sessions = meter.create_counter(
+            "hermes.sessions",
+            unit="{session}",
+            description="Sessions by outcome",
+        )
+
+    def post_api_request(self, **payload: Any) -> None:
+        self._dispatcher.submit(stamp("api_request", payload))
+
+    def api_request_error(self, **payload: Any) -> None:
+        self._dispatcher.submit(stamp("api_error", payload))
+
+    def post_tool_call(self, **payload: Any) -> None:
+        self._dispatcher.submit(stamp("tool_call", payload))
+
+    def on_session_end(self, **payload: Any) -> None:
+        self._dispatcher.submit(stamp("session_end", payload))
+
+    def handle(self, event: Any) -> None:
+        if not isinstance(event, Event):
+            return
+        {
+            "api_request": self._api_request,
+            "api_error": self._api_error,
+            "tool_call": self._tool_call,
+            "session_end": self._session_end,
+        }[event.kind](event.payload)
+
+    def _provider_dimensions(self, payload: Mapping[str, Any]) -> dict[str, Any]:
+        return {
+            "gen_ai.provider.name": _text(payload, "provider"),
+            "gen_ai.request.model": _model_label(payload),
+            "hermes.platform": _text(payload, "platform"),
+        }
+
+    def _api_request(self, payload: Mapping[str, Any]) -> None:
+        dimensions = self._provider_dimensions(payload)
+        self._duration.record(_elapsed_seconds(payload), dimensions)
+        self._requests.add(
+            1,
+            {
+                **dimensions,
+                "hermes.outcome": "ok",
+                "gen_ai.response.finish_reasons": _text(payload, "finish_reason"),
+            },
+        )
+        usage = payload.get("usage")
+        if not isinstance(usage, Mapping):
+            return
+        for source, label in _TOKEN_BUCKETS:
+            count = usage.get(source)
+            if isinstance(count, int) and count:
+                self._tokens.add(count, {**dimensions, "gen_ai.token.type": label})
+
+    def _api_error(self, payload: Mapping[str, Any]) -> None:
+        dimensions = self._provider_dimensions(payload)
+        self._duration.record(_elapsed_seconds(payload), dimensions)
+        attributes: dict[str, Any] = {
+            **dimensions,
+            "hermes.outcome": "error",
+            "error.type": _text(payload, "reason"),
+        }
+        status_code = payload.get("status_code")
+        if isinstance(status_code, int):
+            attributes["http.response.status_code"] = status_code
+        self._requests.add(1, attributes)
+
+    def _tool_call(self, payload: Mapping[str, Any]) -> None:
+        duration_ms = payload.get("duration_ms")
+        elapsed = float(duration_ms) / 1000.0 if isinstance(duration_ms, (int, float)) else 0.0
+        dimensions = {
+            "gen_ai.tool.name": _text(payload, "tool_name"),
+            "hermes.platform": _text(payload, "platform"),
+        }
+        succeeded = str(payload.get("status") or "").lower() in ("ok", "success", "")
+        self._tool_duration.record(elapsed, dimensions)
+        attributes: dict[str, Any] = {
+            **dimensions,
+            "hermes.outcome": "ok" if succeeded else "error",
+        }
+        if not succeeded:
+            attributes["error.type"] = _text(payload, "error_type")
+        self._tool_calls.add(1, attributes)
+
+    def _session_end(self, payload: Mapping[str, Any]) -> None:
+        outcome = "interrupted" if payload.get("interrupted") else "completed"
+        self._sessions.add(
+            1,
+            {"hermes.outcome": outcome, "hermes.platform": _text(payload, "platform")},
+        )
