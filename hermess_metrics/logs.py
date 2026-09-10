@@ -12,8 +12,7 @@ import logging
 from collections.abc import Mapping
 from typing import Any
 
-from opentelemetry._logs import LogRecord, SeverityNumber
-from opentelemetry.sdk._logs import Logger
+from opentelemetry._logs import Logger, LogRecord, SeverityNumber
 
 from .events import Event
 from .redaction import CLASS_MESSAGES, CLASS_TOOL_IO, Redactor

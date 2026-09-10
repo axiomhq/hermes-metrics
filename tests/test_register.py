@@ -10,6 +10,7 @@ from hypothesis import strategies as st
 
 import hermess_metrics
 from hermess_metrics.config import Config
+from hermess_metrics.runtime import HOOK_KINDS
 
 
 class FakeCtx:
@@ -53,10 +54,31 @@ def test_register_on_inactive_config_registers_nothing() -> None:
     assert ctx.middleware == []
 
 
-def test_register_on_active_config_registers_nothing_yet() -> None:
+def test_register_on_active_config_subscribes_to_the_hooks() -> None:
     ctx = FakeCtx()
-    hermess_metrics.register(ctx, env=FULL_ENV)
+    hermess_metrics.register(ctx, env=FULL_ENV, runtime_factory=_FakeRuntime)
+    assert [name for name, _ in ctx.hooks] == list(HOOK_KINDS) + ["on_session_finalize"]
+
+
+def test_register_survives_a_runtime_that_cannot_start() -> None:
+    ctx = FakeCtx()
+    config = hermess_metrics.register(ctx, env=FULL_ENV, runtime_factory=_explode)
+    assert config.active
     assert ctx.hooks == []
+
+
+def _explode(config: Config) -> Any:
+    raise RuntimeError("no exporters here")
+
+
+class _FakeRuntime:
+    def __init__(self, config: Config) -> None:
+        self.config = config
+
+    def register_hooks(self, ctx: Any) -> tuple[str, ...]:
+        for hook in (*HOOK_KINDS, "on_session_finalize"):
+            ctx.register_hook(hook, lambda **kwargs: None)
+        return (*HOOK_KINDS, "on_session_finalize")
 
 
 def test_register_reports_the_posture_it_resolved() -> None:
@@ -82,4 +104,14 @@ def test_register_defaults_to_the_process_environment(monkeypatch: Any) -> None:
     )
 )
 def test_register_never_raises(env: dict[str, str]) -> None:
-    hermess_metrics.register(FakeCtx(), env=env)
+    hermess_metrics.register(FakeCtx(), env=env, runtime_factory=_FakeRuntime)
+
+
+def test_register_stays_idle_when_the_otlp_extra_is_absent(monkeypatch: Any) -> None:
+    from hermess_metrics import transport
+
+    monkeypatch.setattr(transport, "sdk_hint", lambda: "the opentelemetry SDK is required")
+    ctx = FakeCtx()
+    config = hermess_metrics.register(ctx, env=FULL_ENV, runtime_factory=_FakeRuntime)
+    assert config.active
+    assert ctx.hooks == []

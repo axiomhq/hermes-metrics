@@ -72,3 +72,10 @@ def test_internal_imports_are_relative() -> None:
                 if node.level == 0 and module.split(".")[0] == "hermess_metrics":
                     offenders.append(f"{source.name}:{node.lineno} from {module}")
     assert offenders == []
+
+
+def test_the_manifest_declares_every_hook_the_runtime_subscribes_to() -> None:
+    from hermess_metrics.runtime import FLUSH_HOOK, HOOK_KINDS
+
+    declared = set(_manifest()["provides_hooks"])  # type: ignore[arg-type]
+    assert declared == set(HOOK_KINDS) | {FLUSH_HOOK}
