@@ -537,7 +537,16 @@ def test_status_names_both_problems_when_both_apply(monkeypatch) -> None:
 
 
 def _alert_args(host: str, **overrides: Any) -> argparse.Namespace:
-    values: dict[str, Any] = {"axiom_action": "alerts", "token": None, "org": "", "domain": host}
+    values: dict[str, Any] = {
+        "axiom_action": "alerts",
+        "token": None,
+        "org": "",
+        "domain": host,
+        "tokens_per_15m": None,
+        "spend_per_hour": None,
+        "max_subagents": None,
+        "defaults": True,
+    }
     values.update(overrides)
     return argparse.Namespace(**values)
 
@@ -560,7 +569,7 @@ def test_alerts_reports_each_monitor(monkeypatch) -> None:
     monkeypatch.setenv("HERMES_AXIOM_METRICS_DATASET", "hermes-metrics")
     created: list[str] = []
 
-    def fake_create(plane: Any, datasets: dict[str, str]) -> Any:
+    def fake_create(plane: Any, datasets: dict[str, str], budgets: Any = None) -> Any:
         created.append("called")
         return cli.alerts.Report(created=["one"], failed=[("two", "nope")])
 
@@ -578,7 +587,9 @@ def test_alerts_exits_nonzero_when_nothing_was_created(monkeypatch) -> None:
     monkeypatch.setenv("HERMES_AXIOM_TOKEN", "xaat-1")
     monkeypatch.setenv("HERMES_AXIOM_TRACES_DATASET", "hermes-traces")
     monkeypatch.setattr(
-        cli.alerts, "create", lambda plane, datasets: cli.alerts.Report(failed=[("a", "b")])
+        cli.alerts,
+        "create",
+        lambda plane, datasets, budgets=None: cli.alerts.Report(failed=[("a", "b")]),
     )
     assert cli.run_alerts(_alert_args("x"), out=_Recorder()) == 1
 
@@ -588,3 +599,88 @@ def test_handle_routes_to_alerts(monkeypatch) -> None:
     monkeypatch.delenv("HERMES_AXIOM_LOGS_DATASET", raising=False)
     monkeypatch.delenv("HERMES_AXIOM_METRICS_DATASET", raising=False)
     assert cli.handle(_alert_args("x")) == 1
+
+
+def _budget_env(monkeypatch: Any) -> None:
+    monkeypatch.setenv("HERMES_AXIOM_TOKEN", "xaat-1")
+    monkeypatch.setenv("HERMES_AXIOM_METRICS_DATASET", "hermes-metrics")
+
+
+def _capture_budgets(monkeypatch: Any) -> list[Any]:
+    seen: list[Any] = []
+
+    def fake(plane: Any, datasets: dict[str, str], budgets: Any = None) -> Any:
+        seen.append(budgets)
+        return cli.alerts.Report(created=["one"])
+
+    monkeypatch.setattr(cli.alerts, "create", fake)
+    return seen
+
+
+def test_alerts_asks_for_each_budget_and_shows_the_default(monkeypatch) -> None:
+    _budget_env(monkeypatch)
+    seen = _capture_budgets(monkeypatch)
+    asked: list[str] = []
+
+    def ask(prompt: str) -> str:
+        asked.append(prompt)
+        return ""
+
+    assert cli.run_alerts(_alert_args("x", defaults=False), ask=ask, out=_Recorder()) == 0
+    assert len(asked) == 3
+    assert "500,000" in asked[0] and "5.00" in asked[1] and "8" in asked[2]
+    assert seen[0] == cli.alerts.Budgets()
+
+
+def test_a_typed_budget_is_used(monkeypatch) -> None:
+    _budget_env(monkeypatch)
+    seen = _capture_budgets(monkeypatch)
+    answers = iter(["1,200,000", "$12.50", "4"])
+    cli.run_alerts(_alert_args("x", defaults=False), ask=lambda p: next(answers), out=_Recorder())
+    assert seen[0].tokens_per_15m == 1_200_000
+    assert seen[0].spend_per_hour == 12.5
+    assert seen[0].max_subagents == 4
+
+
+def test_flags_skip_the_question(monkeypatch) -> None:
+    _budget_env(monkeypatch)
+    seen = _capture_budgets(monkeypatch)
+    args = _alert_args("x", defaults=False, tokens_per_15m=99, spend_per_hour=1, max_subagents=2)
+    assert cli.run_alerts(args, ask=_never, out=_Recorder()) == 0
+    assert seen[0].tokens_per_15m == 99
+
+
+def test_defaults_flag_asks_nothing(monkeypatch) -> None:
+    _budget_env(monkeypatch)
+    seen = _capture_budgets(monkeypatch)
+    assert cli.run_alerts(_alert_args("x"), ask=_never, out=_Recorder()) == 0
+    assert seen[0] == cli.alerts.Budgets()
+
+
+@pytest.mark.parametrize("answer", ["banana", "0", "-5"])
+def test_a_nonsense_budget_cancels(monkeypatch, answer: str) -> None:
+    _budget_env(monkeypatch)
+    _capture_budgets(monkeypatch)
+    out = _Recorder()
+    assert cli.run_alerts(_alert_args("x", defaults=False), ask=lambda p: answer, out=out) == 2
+    assert "cancelled" in out.lines[0]
+
+
+def test_the_console_hint_is_printed_after_success(monkeypatch) -> None:
+    _budget_env(monkeypatch)
+    _capture_budgets(monkeypatch)
+    out = _Recorder()
+    cli.run_alerts(_alert_args("x"), ask=_never, out=out)
+    assert any("Axiom console" in line for line in out.lines)
+
+
+def test_the_chosen_budget_reaches_the_monitor(monkeypatch) -> None:
+    from hermess_metrics import alerts as alerts_module
+
+    specs = alerts_module.pack(
+        {"metrics": "hermes-metrics"}, alerts_module.Budgets(tokens_per_15m=123, spend_per_hour=4.5)
+    )
+    by_name = {s["name"]: s for s in specs}
+    assert by_name["Hermes token use is high"]["threshold"] == 123
+    assert "123" in by_name["Hermes token use is high"]["description"]
+    assert by_name["Hermes spend is high"]["threshold"] == 4.5

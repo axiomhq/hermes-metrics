@@ -63,6 +63,12 @@ def build_parser(parser: argparse.ArgumentParser) -> None:
     alerts_cmd.add_argument("--token", help="API token that can create monitors")
     alerts_cmd.add_argument("--org", default="", help="Org id, if your token is not org-scoped")
     alerts_cmd.add_argument("--domain", default=DEFAULT_DOMAIN, help="Axiom API host")
+    alerts_cmd.add_argument("--tokens-per-15m", type=float, help="Token budget per 15 minutes")
+    alerts_cmd.add_argument("--spend-per-hour", type=float, help="Spend budget per hour, USD")
+    alerts_cmd.add_argument("--max-subagents", type=float, help="Concurrent subagents allowed")
+    alerts_cmd.add_argument(
+        "--defaults", action="store_true", help="Take every default without asking"
+    )
 
 
 def register_cli(ctx: Any) -> None:
@@ -84,16 +90,65 @@ def handle(args: argparse.Namespace) -> int:
     return run_setup(args)
 
 
-def run_alerts(args: argparse.Namespace, out: Callable[[str], None] = print) -> int:
+BUDGET_PROMPTS = (
+    ("tokens_per_15m", "tokens_per_15m", "Tokens per 15 minutes before alerting", "{:,.0f}"),
+    ("spend_per_hour", "spend_per_hour", "Spend per hour before alerting, USD", "{:,.2f}"),
+    ("max_subagents", "max_subagents", "Concurrent subagents before alerting", "{:,.0f}"),
+)
+
+
+def _number(raw: str, fallback: float) -> float:
+    """Accept what a person types: blank, commas, a currency sign."""
+    cleaned = raw.strip().lstrip("$").replace(",", "").replace("_", "")
+    if not cleaned:
+        return fallback
+    try:
+        value = float(cleaned)
+    except ValueError as exc:
+        raise ValueError(f"{raw.strip()!r} is not a number") from exc
+    if value <= 0:
+        raise ValueError("a budget has to be greater than zero")
+    return value
+
+
+def _budgets(ask: Callable[[str], str], args: argparse.Namespace) -> alerts.Budgets:
+    """Take budgets from flags, then from the operator, then from the defaults."""
+    chosen: dict[str, float] = {}
+    asked = False
+    for field_name, flag, question, fmt in BUDGET_PROMPTS:
+        given = getattr(args, flag, None)
+        default = float(getattr(alerts.Budgets(), field_name))
+        if given is not None:
+            chosen[field_name] = float(given)
+            continue
+        if getattr(args, "defaults", False):
+            chosen[field_name] = default
+            continue
+        if not asked:
+            asked = True
+        chosen[field_name] = _number(ask(f"{question} [{fmt.format(default)}]: "), default)
+    return alerts.Budgets(**chosen)
+
+
+def run_alerts(
+    args: argparse.Namespace,
+    ask: Callable[[str], str] = input,
+    out: Callable[[str], None] = print,
+) -> int:
     """Create the monitor pack against the datasets already configured."""
     config = Config.from_env()
     if not config.configured_signals:
         out("Nothing to alert on yet; run `hermes axiom setup` first.")
         return 1
+    try:
+        budgets = _budgets(ask, args)
+    except (ValueError, EOFError, KeyboardInterrupt) as exc:
+        out(f"Alerts cancelled: {exc}")
+        return 2
     token = str(getattr(args, "token", "") or config.token)
     plane = ControlPlane(domain=args.domain, token=token, org=str(args.org or config.org))
     datasets = {signal: config.dataset_for(signal) for signal in config.configured_signals}
-    report = alerts.create(plane, datasets)
+    report = alerts.create(plane, datasets, budgets)
     _report_alerts(report, out)
     return 0 if report.created else 1
 
@@ -105,6 +160,9 @@ def _report_alerts(report: alerts.Report, out: Callable[[str], None]) -> None:
     for name, reason in report.failed:
         out(f"  skipped {name}")
         out(f"          {reason[:110]}")
+    if report.created:
+        out("")
+        out("Every threshold can be changed later in the Axiom console.")
 
 
 def _choose(ask: Callable[[str], str], args: argparse.Namespace) -> tuple[str | None, str]:

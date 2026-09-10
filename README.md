@@ -31,7 +31,8 @@ write to them, and prints a claim link. Follow that link within a day or the org
 and everything in it is deleted. Choose **2** to use an Axiom org you already
 have, with a token holding `datasets:create`. Either way it writes the settings
 and you are done; `hermes axiom status` confirms it, and `hermes axiom alerts`
-adds the seven monitors pictured above.
+adds the seven monitors pictured above, asking you for the two budgets that
+depend on your workload.
 
 ## What you get
 
