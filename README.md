@@ -27,6 +27,7 @@ hermes plugins enable hermess-metrics
 | HERMES_AXIOM_LOGS_DATASET    | Dataset receiving logs                   |
 | HERMES_AXIOM_METRICS_DATASET | Dataset receiving metrics                |
 | HERMES_AXIOM_DEBUG           | Verbose plugin logging                   |
+| HERMES_AXIOM_METRIC_INTERVAL_SECONDS | How often metrics are exported, default 30 |
 
 Axiom requires a dedicated dataset per signal, and a metrics dataset must be
 created with the OpenTelemetry metrics kind.

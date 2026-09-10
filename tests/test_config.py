@@ -119,3 +119,23 @@ def test_max_chars_is_configurable_and_falls_back_when_nonsense() -> None:
 def test_container_stats_are_off_unless_asked_for() -> None:
     assert Config.from_env({}).container_stats is False
     assert Config.from_env({"HERMES_AXIOM_CONTAINER_STATS": "true"}).container_stats is True
+
+
+def test_the_metric_interval_defaults_to_thirty_seconds() -> None:
+    assert Config.from_env({}).metric_interval_seconds == 30
+
+
+def test_the_metric_interval_is_configurable() -> None:
+    assert (
+        Config.from_env({"HERMES_AXIOM_METRIC_INTERVAL_SECONDS": "10"}).metric_interval_seconds
+        == 10
+    )
+
+
+def test_a_too_frequent_interval_is_clamped() -> None:
+    """Exporting more often than this costs more than the resolution is worth."""
+    for raw in ("1", "0", "-5", "banana"):
+        assert (
+            Config.from_env({"HERMES_AXIOM_METRIC_INTERVAL_SECONDS": raw}).metric_interval_seconds
+            >= 5
+        )

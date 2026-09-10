@@ -98,7 +98,10 @@ class Runtime:
             recorders.append(TraceRecorder(provider.get_tracer(__package__), redactor))
 
         if SIGNAL_METRICS in transport.exporters:
-            reader = PeriodicExportingMetricReader(transport.exporters[SIGNAL_METRICS])
+            reader = PeriodicExportingMetricReader(
+                transport.exporters[SIGNAL_METRICS],
+                export_interval_millis=config.metric_interval_seconds * 1000,
+            )
             provider_m = MeterProvider(resource=transport.resource, metric_readers=[reader])
             providers.append(provider_m)
             meter = provider_m.get_meter(__package__)

@@ -18,6 +18,7 @@ ENV_LOGS_DATASET = ENV_PREFIX + "LOGS_DATASET"
 ENV_METRICS_DATASET = ENV_PREFIX + "METRICS_DATASET"
 ENV_SERVICE_NAME = ENV_PREFIX + "SERVICE_NAME"
 ENV_QUEUE_CAPACITY = ENV_PREFIX + "QUEUE_CAPACITY"
+ENV_METRIC_INTERVAL = ENV_PREFIX + "METRIC_INTERVAL_SECONDS"
 ENV_REDACTION = ENV_PREFIX + "REDACTION"
 ENV_MAX_CHARS = ENV_PREFIX + "MAX_CHARS"
 ENV_CONTAINER_STATS = ENV_PREFIX + "CONTAINER_STATS"
@@ -28,6 +29,8 @@ ENV_DEBUG = ENV_PREFIX + "DEBUG"
 
 DEFAULT_DOMAIN = "api.axiom.co"
 DEFAULT_SERVICE_NAME = "hermes"
+DEFAULT_METRIC_INTERVAL = 30
+MIN_METRIC_INTERVAL = 5
 
 SIGNAL_TRACES = "traces"
 SIGNAL_LOGS = "logs"
@@ -87,6 +90,7 @@ class Config:
     metrics_dataset: str = ""
     service_name: str = DEFAULT_SERVICE_NAME
     queue_capacity: int = DEFAULT_CAPACITY
+    metric_interval_seconds: int = DEFAULT_METRIC_INTERVAL
     redaction: str = DEFAULT_LEVEL
     max_chars: int = DEFAULT_MAX_CHARS
     container_stats: bool = False
@@ -106,6 +110,7 @@ class Config:
                 ENV_METRICS_DATASET,
                 ENV_SERVICE_NAME,
                 ENV_QUEUE_CAPACITY,
+                ENV_METRIC_INTERVAL,
                 ENV_REDACTION,
                 ENV_MAX_CHARS,
                 ENV_CONTAINER_STATS,
@@ -127,6 +132,10 @@ class Config:
             metrics_dataset=_text(source, ENV_METRICS_DATASET),
             service_name=_text(source, ENV_SERVICE_NAME) or DEFAULT_SERVICE_NAME,
             queue_capacity=_positive_int(_text(source, ENV_QUEUE_CAPACITY), DEFAULT_CAPACITY),
+            metric_interval_seconds=max(
+                MIN_METRIC_INTERVAL,
+                _positive_int(_text(source, ENV_METRIC_INTERVAL), DEFAULT_METRIC_INTERVAL),
+            ),
             redaction=Redactor.for_level(_text(source, ENV_REDACTION)).level,
             max_chars=_positive_int(_text(source, ENV_MAX_CHARS), DEFAULT_MAX_CHARS),
             container_stats=_text(source, ENV_CONTAINER_STATS).lower() in _TRUTHY,

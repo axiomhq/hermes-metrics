@@ -217,3 +217,14 @@ def test_container_stats_are_wired_only_when_enabled() -> None:
             assert runtime.flush(2.0)
         finally:
             runtime.shutdown(2.0)
+
+
+def test_the_metric_reader_uses_the_configured_interval() -> None:
+    config = Config.from_env(dict(ALL_ENV, HERMES_AXIOM_METRIC_INTERVAL_SECONDS="15"))
+    exporters: dict[str, Any] = {"metrics": _NullMetricExporter()}
+    runtime = Runtime.build(config, Transport(exporters=exporters, resource=Resource.create({})))
+    try:
+        readers = runtime.providers[0]._metric_readers
+        assert [r._export_interval_millis for r in readers] == [15_000]
+    finally:
+        runtime.shutdown(2.0)
