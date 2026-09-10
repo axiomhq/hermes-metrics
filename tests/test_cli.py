@@ -505,3 +505,31 @@ def test_keeping_the_supplied_token_is_called_out(server, tmp_path, monkeypatch)
     assert "Stored the token you supplied" in joined
     assert cli.PERMISSION_TOKENS in joined
     assert (tmp_path / ".env").read_text().count("xaat-mine") == 1
+
+
+def test_status_reports_a_missing_sdk_rather_than_claiming_it_is_on(monkeypatch) -> None:
+    """A drop-in install copies the plugin but not opentelemetry."""
+    from hermess_metrics import transport
+
+    monkeypatch.setenv("HERMES_AXIOM_TOKEN", "xaat-1")
+    monkeypatch.setenv("HERMES_AXIOM_TRACES_DATASET", "t")
+    monkeypatch.setattr(transport, "sdk_hint", lambda: "the opentelemetry SDK is required")
+    out = _Recorder()
+    assert cli.run_status(out=out) == 1
+    joined = "\n".join(out.lines)
+    assert "cannot export" in joined
+    assert "opentelemetry" in joined
+    assert "is on" not in joined
+
+
+def test_status_names_both_problems_when_both_apply(monkeypatch) -> None:
+    from hermess_metrics import transport
+
+    for name in ("HERMES_AXIOM_TOKEN", "HERMES_AXIOM_TRACES_DATASET"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(transport, "sdk_hint", lambda: "the opentelemetry SDK is required")
+    out = _Recorder()
+    assert cli.run_status(out=out) == 1
+    joined = "\n".join(out.lines)
+    assert "cannot export" in joined
+    assert "Settings are missing too" in joined

@@ -190,7 +190,17 @@ def _report(result: Provisioned, target: Path, out: Callable[[str], None]) -> No
 
 
 def run_status(out: Callable[[str], None] = print) -> int:
+    from . import transport
+
     config = Config.from_env()
+    hint = transport.sdk_hint()
+    if hint is not None:
+        out("Axiom telemetry is configured but cannot export:")
+        out(f"  {hint}")
+        out("A drop-in install copies the plugin but not its dependencies.")
+        if not config.active:
+            out("Settings are missing too; run `hermes axiom setup` after installing it.")
+        return 1
     if not config.active:
         out("Axiom telemetry is idle:")
         for problem in config.problems():
