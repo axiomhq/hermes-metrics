@@ -1,9 +1,4 @@
-"""The plugin's own numbers, reported as metrics.
-
-Without these a quiet dashboard is ambiguous: it could mean a quiet agent, or
-a plugin dropping every event on the floor. The dispatcher already keeps the
-counts; this publishes them.
-"""
+"""Publishes the dispatcher's own accounting as metrics."""
 
 from __future__ import annotations
 

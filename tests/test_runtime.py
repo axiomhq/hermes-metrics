@@ -1,8 +1,4 @@
-"""Assembly of providers, recorders and hooks.
-
-One hook invocation must produce exactly one event, reaching every recorder
-that consumes its kind and no recorder twice.
-"""
+"""Assembly of providers, recorders and hook subscriptions."""
 
 from __future__ import annotations
 

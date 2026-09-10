@@ -1,8 +1,4 @@
-"""Environment-backed configuration and per-signal destinations.
-
-Hermes 0.19 hands plugins a context without a config accessor, so settings
-arrive through the process environment, which ``~/.hermes/.env`` populates.
-"""
+"""Plugin settings and per-signal destinations, read from the environment."""
 
 from __future__ import annotations
 
@@ -34,9 +30,7 @@ SIGNAL_LOGS = "logs"
 SIGNAL_METRICS = "metrics"
 SIGNALS = (SIGNAL_TRACES, SIGNAL_LOGS, SIGNAL_METRICS)
 
-# Axiom reads the destination dataset from the signal's own header and falls
-# back to the generic one, so naming only the specific header keeps each
-# signal pinned to its own dataset.
+# Axiom falls back to the generic header, so name only the specific one.
 DATASET_HEADERS = {
     SIGNAL_TRACES: "x-axiom-traces-dataset",
     SIGNAL_LOGS: "x-axiom-logs-dataset",

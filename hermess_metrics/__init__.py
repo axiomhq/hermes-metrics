@@ -1,9 +1,4 @@
-"""Ships Hermes agent-loop telemetry to Axiom as OpenTelemetry signals.
-
-Hermes calls :func:`register` once when the plugin loads, either from a
-drop-in directory under ``~/.hermes/plugins/`` or through the
-``hermes_agent.plugins`` entry point.
-"""
+"""Ships Hermes agent-loop telemetry to Axiom as OpenTelemetry signals."""
 
 from __future__ import annotations
 
@@ -30,11 +25,7 @@ def register(
     env: Mapping[str, str] | None = None,
     runtime_factory: Callable[[Config], Any] = _default_factory,
 ) -> Config:
-    """Resolve settings, start the exporters, and subscribe to the hooks.
-
-    Returns the resolved config so callers and tests can inspect what the
-    environment produced.
-    """
+    """Resolve settings, start the exporters, and subscribe to the hooks."""
     from . import transport
 
     config = Config.from_env(env)

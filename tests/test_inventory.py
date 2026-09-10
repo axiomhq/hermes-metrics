@@ -1,10 +1,4 @@
-"""What is installed, and how often it was used.
-
-Hermes registers tools as their modules are imported during agent startup, so
-the registry is empty when a plugin loads. The inventory is therefore polled on
-every export rather than snapshotted once, which also picks up tools other
-plugins register later.
-"""
+"""The registered tool list and per-tool call counts."""
 
 from __future__ import annotations
 

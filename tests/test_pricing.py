@@ -1,9 +1,4 @@
-"""Published rates for the models actually in use.
-
-Rates come from the table Hermes ships, which is a plain dictionary lookup.
-Routes Hermes prices by fetching model metadata over the network are skipped,
-because the export path is the wrong place to wait on an HTTP call.
-"""
+"""Published token rates for the models in use."""
 
 from __future__ import annotations
 

@@ -1,8 +1,4 @@
-"""Aggregates built from Hermes hook payloads.
-
-Metric attribute sets are held in memory by the SDK, one series per unique
-combination, so only bounded dimensions belong here. Identifiers stay on spans.
-"""
+"""Counters and histograms built from hook payloads."""
 
 from __future__ import annotations
 
@@ -242,9 +238,7 @@ def test_a_request_without_usage_still_records_a_duration(recorder_and_reader) -
     assert "gen_ai.client.token.usage" not in points
 
 
-# One series per attribute combination is held in SDK memory for the life of the
-# process, so an identifier on a metric is an unbounded leak. Identifiers belong
-# on spans, which are exported and released.
+# One series per attribute set lives for the process, so identifiers stay off.
 def test_no_identifier_ever_reaches_a_metric_attribute(recorder_and_reader) -> None:
     recorder, reader, dispatcher = recorder_and_reader
     send(dispatcher, "api_request", **_api_request())

@@ -1,10 +1,4 @@
-"""What leaves the machine.
-
-Hermes hook payloads carry prompts, conversation history, tool arguments and
-tool results, and its own documentation warns they may contain secrets. The
-level chooses how much content is shipped; credential masking and size caps
-apply at every level.
-"""
+"""What content leaves the machine at each level."""
 
 from __future__ import annotations
 
@@ -117,8 +111,7 @@ def test_long_sequences_are_bounded() -> None:
     assert len(out) <= 200
 
 
-# The level governs content, never credentials: a key that names a secret is
-# masked at every level and at every depth.
+# The level governs content; credentials are masked at every level.
 @given(json_values, st.integers(min_value=0, max_value=5))
 @settings(suppress_health_check=[HealthCheck.function_scoped_fixture], max_examples=150)
 def test_a_secret_never_survives_at_any_level(payload: object, depth: int) -> None:

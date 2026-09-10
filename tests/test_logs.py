@@ -1,9 +1,4 @@
-"""Log records built from Hermes observer hooks.
-
-The body and attributes stay content-free at the default level: an error class,
-a status code and the identifiers needed to find the matching span. Raw provider
-and tool error text is content, and appears only at the levels that permit it.
-"""
+"""Log records built from failed provider and tool calls."""
 
 from __future__ import annotations
 

@@ -1,9 +1,4 @@
-"""How a call is billed.
-
-Token counts alone cannot tell a subscription-included call from a metered one,
-and that is the single fact Axiom cannot derive from the telemetry. Hermes
-resolves it with pure string matching, so the label is cheap and safe to attach.
-"""
+"""The billing route label attached to provider calls."""
 
 from __future__ import annotations
 
@@ -45,8 +40,7 @@ def _raise_import_error() -> None:
     raise ImportError("hermes is not installed here")
 
 
-# The label becomes a metric dimension, so it must come from a closed set no
-# matter what a provider plugin puts in the model or base url.
+# The label is a metric dimension, so it must come from a closed set.
 @given(st.text(max_size=60), st.text(max_size=30), st.text(max_size=60))
 def test_the_label_is_always_from_the_closed_set(model: str, provider: str, base_url: str) -> None:
     assert billing.billing_mode(model, provider, base_url) in billing.BILLING_MODES

@@ -1,11 +1,4 @@
-"""Spans built from Hermes observer hooks.
-
-Attribute names follow Axiom's conventions for generative AI spans, which are
-what its AI engineering views read. Hook callbacks only capture their payload;
-the spans themselves are built on the worker thread from the timestamps the
-hooks carry, so a span's duration reflects the API call rather than the moment
-the recorder happened to run.
-"""
+"""Builds spans from hook payloads in Axiom's generative AI conventions."""
 
 from __future__ import annotations
 
@@ -53,11 +46,7 @@ def _nanos(seconds: float) -> int:
 
 
 class TraceRecorder:
-    """Turns hook payloads into spans, one worker thread at a time.
-
-    Every field of the live-span state is read and written only by the worker,
-    so the maps need no lock.
-    """
+    """Turns hook payloads into spans; live state is worker-owned, so unlocked."""
 
     def __init__(
         self,

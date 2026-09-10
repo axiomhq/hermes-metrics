@@ -1,9 +1,4 @@
-"""Per-signal destinations.
-
-Axiom resolves the destination dataset from a signal-specific header and falls
-back to ``x-axiom-dataset``. Sending the generic header would let one signal's
-dataset stand in for another, so each endpoint carries only its own.
-"""
+"""Per-signal destinations and the headers they carry."""
 
 from __future__ import annotations
 
@@ -73,8 +68,7 @@ def test_an_inactive_config_offers_no_endpoints() -> None:
     assert Config.from_env({}).endpoints() == ()
 
 
-# Hermes logs plugin state at load and on error; a token in a dataclass repr
-# would ride along into those logs.
+# Hermes logs plugin state, so a token must stay out of reprs.
 def test_the_token_stays_out_of_reprs() -> None:
     cfg = Config.from_env(ALL_ENV)
     assert "xaat-secret" not in repr(cfg)

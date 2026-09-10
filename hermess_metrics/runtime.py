@@ -1,9 +1,4 @@
-"""Assembly: providers, recorders, and the hooks that feed them.
-
-One stamped event per hook goes onto one queue, and the worker fans it out to
-every recorder. The OpenTelemetry batch processors sit downstream of that queue
-and keep HTTP off it in turn.
-"""
+"""Assembles providers, recorders and hook subscriptions."""
 
 from __future__ import annotations
 
@@ -39,8 +34,7 @@ from .traces import TraceRecorder
 from .transport import Transport
 from .transport import build as build_transport
 
-# The version Hermes stamps on every hook payload. A change here means the
-# payload contract moved and the mapping below needs rereading.
+# The payload schema this field mapping was written against.
 EXPECTED_SCHEMA = "hermes.observer.v1"
 SCHEMA_FIELD = "telemetry_schema_version"
 

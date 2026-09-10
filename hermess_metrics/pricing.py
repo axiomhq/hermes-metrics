@@ -1,12 +1,4 @@
-"""Published rates for the models actually in use.
-
-Exporting the rate alongside the token counters lets a dashboard compute spend
-without a rate table of its own, and recompute history when a rate changes.
-
-Only routes Hermes prices from its shipped table are published. Pricing an
-OpenRouter or custom endpoint means fetching model metadata over the network,
-and the export path is the wrong place to wait on an HTTP call.
-"""
+"""Publishes token rates for the models in use."""
 
 from __future__ import annotations
 

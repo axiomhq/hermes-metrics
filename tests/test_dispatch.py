@@ -1,10 +1,4 @@
-"""The hand-off between hook callbacks and export.
-
-Hermes dispatches observer hooks synchronously on the agent loop thread and
-wraps each callback in its own catch-and-log. A callback that blocks stalls the
-user's turn, and one that raises disappears into a warning. Submission must
-therefore never block, never raise, and never lose account of what it did.
-"""
+"""The hand-off between hook callbacks and background work."""
 
 from __future__ import annotations
 
@@ -111,8 +105,7 @@ def test_the_worker_thread_never_holds_the_interpreter_open() -> None:
         dispatcher.stop(FLUSH_TIMEOUT)
 
 
-# Every submission is accounted for exactly once, so a gap in the telemetry can
-# always be attributed rather than guessed at.
+# Every submission is accounted for exactly once.
 @given(st.lists(st.integers(), min_size=1, max_size=200), st.integers(min_value=1, max_value=8))
 def test_submissions_are_fully_accounted(values: list[int], capacity: int) -> None:
     dispatcher: Dispatcher[int] = Dispatcher(capacity=capacity)

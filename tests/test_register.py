@@ -94,8 +94,7 @@ def test_register_defaults_to_the_process_environment(monkeypatch: Any) -> None:
     assert hermess_metrics.register(FakeCtx()).active is False
 
 
-# Hermes catches and logs whatever a plugin raises, so a raise here is silent
-# breakage rather than a visible failure.
+# Hermes swallows a raising plugin, so a raise here is silent breakage.
 @given(
     st.dictionaries(
         keys=st.sampled_from(sorted(Config.env_names())),

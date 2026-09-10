@@ -1,9 +1,4 @@
-"""Structural guards for the two ways Hermes can load this plugin.
-
-A drop-in install imports the package directory under a synthetic
-``hermes_plugins.<slug>`` name and reads ``plugin.yaml`` beside the module. A
-pip install resolves the ``hermes_agent.plugins`` entry point instead.
-"""
+"""Structural guards for the drop-in and pip install paths."""
 
 from __future__ import annotations
 
@@ -57,8 +52,7 @@ def test_distribution_version_matches_the_package() -> None:
 
 
 def test_internal_imports_are_relative() -> None:
-    """Absolute self-imports break the drop-in path, where the package is bound
-    to ``hermes_plugins.<slug>`` and ``hermess_metrics`` is not importable."""
+    """The drop-in path binds the package elsewhere, so self-imports must be relative."""
     offenders: list[str] = []
     for source in sorted(PACKAGE_DIR.rglob("*.py")):
         tree = ast.parse(source.read_text(), filename=str(source))

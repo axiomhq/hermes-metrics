@@ -1,15 +1,4 @@
-"""Installed skills and how often each was loaded.
-
-Skills are directories holding a SKILL.md, so discovery is a filesystem walk.
-That is too costly to repeat on every export and skills change rarely, so the
-scan is cached for a short while.
-
-Hermes has no skill lifecycle hook. A skill reaches the model through the
-skill_view tool, so the count comes from the tool hook. That means reading a
-tool argument, which the redactor otherwise governs; a skill name is a bounded
-identifier from a closed on-disk set, which is why it is treated as metadata
-here rather than as tool content.
-"""
+"""Publishes the installed skill list and per-skill load counts."""
 
 from __future__ import annotations
 

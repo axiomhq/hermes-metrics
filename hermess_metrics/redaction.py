@@ -1,10 +1,4 @@
-"""Content policy for everything leaving the machine.
-
-Hermes hook payloads carry prompts, conversation history, tool arguments and
-tool results. The level chooses how much of that content ships. Credential
-masking and size caps are unconditional, so raising the level widens what is
-observable without ever widening what is leaked.
-"""
+"""Content policy for everything leaving the machine."""
 
 from __future__ import annotations
 

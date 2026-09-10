@@ -1,5 +1,4 @@
-"""Config is read from the environment, matching the convention bundled Hermes
-plugins use, and must resolve to a definite posture for any input."""
+"""Settings read from the environment."""
 
 from __future__ import annotations
 
@@ -75,8 +74,7 @@ def test_every_env_name_carries_the_shared_prefix() -> None:
     assert all(name.startswith(ENV_PREFIX) for name in Config.env_names())
 
 
-# A plugin that raises during load leaves Hermes logging a warning and running
-# without telemetry, so config parsing must total over whatever the shell holds.
+# Hermes swallows a raising plugin, so parsing must be total.
 @given(
     st.dictionaries(
         keys=st.sampled_from(sorted(Config.env_names())),

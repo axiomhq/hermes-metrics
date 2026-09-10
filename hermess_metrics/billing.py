@@ -1,15 +1,4 @@
-"""How a provider call is billed.
-
-Token counts cannot distinguish a subscription-included call from a metered
-one, which makes this the one costing fact Axiom cannot derive from the rest of
-the telemetry. Hermes resolves it by string matching alone, so the label is
-cheap enough to attach to every call.
-
-Money arithmetic stays out. Hermes prices a call by fetching model metadata
-over the network, which does not belong on the export path, and rates change
-after the fact; multiplying the exported token counters by a rate table in a
-dashboard recomputes history correctly and edits without a redeploy.
-"""
+"""Resolves how a provider call is billed."""
 
 from __future__ import annotations
 

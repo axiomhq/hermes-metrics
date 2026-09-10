@@ -1,12 +1,4 @@
-"""Installed skills and how often each was loaded.
-
-Skills are directories holding a SKILL.md, so discovery is a filesystem walk.
-That is too expensive to repeat on every export, and skills change rarely, so
-the scan is cached briefly.
-
-Hermes has no skill hook. A skill is loaded through the skill_view tool, so the
-count comes from the tool hook and the skill name is read out of its arguments.
-"""
+"""The installed skill list and per-skill load counts."""
 
 from __future__ import annotations
 

@@ -1,10 +1,4 @@
-"""Spans built from Hermes hook payloads.
-
-Axiom recognises AI spans by their gen_ai attributes, so the shapes here follow
-Axiom's manual instrumentation conventions rather than an invented schema.
-Every span is built on the worker thread from timestamps the hooks supply, so
-the recorder never depends on when it happens to run.
-"""
+"""Spans built from hook payloads."""
 
 from __future__ import annotations
 

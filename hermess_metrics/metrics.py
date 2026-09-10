@@ -1,10 +1,4 @@
-"""Aggregates built from Hermes observer hooks.
-
-The SDK holds one series per unique attribute combination for the life of the
-process, so every dimension here is bounded: provider, model, tool name, finish
-reason, error class and outcome. Session, turn, request and tool call
-identifiers stay on spans, which are exported and released.
-"""
+"""Builds counters and histograms from hook payloads."""
 
 from __future__ import annotations
 
@@ -17,8 +11,7 @@ from opentelemetry.metrics import Meter
 from .billing import billing_mode
 from .events import Event
 
-# Hermes reports api_duration as a difference of two time.time() calls, so the
-# timestamps are the dependable source for elapsed seconds.
+# Hermes reports api_duration in seconds despite documenting milliseconds.
 _TOKEN_BUCKETS = (
     ("input_tokens", "input"),
     ("output_tokens", "output"),

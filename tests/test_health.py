@@ -1,8 +1,4 @@
-"""The plugin's own numbers.
-
-A quiet dashboard could mean a quiet agent or a plugin dropping everything on
-the floor. These instruments make the two distinguishable.
-"""
+"""The plugin's own queue accounting, published as metrics."""
 
 from __future__ import annotations
 

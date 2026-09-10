@@ -1,9 +1,4 @@
-"""OTLP exporter construction.
-
-The OpenTelemetry SDK is an optional dependency. It is imported inside the
-functions that need it so a Hermes install without the extra loads the plugin
-and reports the gap instead of failing at import time.
-"""
+"""Builds one OTLP exporter per configured signal."""
 
 from __future__ import annotations
 

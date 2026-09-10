@@ -1,10 +1,4 @@
-"""Approval friction.
-
-Hermes fires approval hooks that its published reference omits. The payload
-carries the raw command, which is content, and a pattern key naming the guard
-that matched, which is not. Only the latter becomes a dimension, and even that
-is capped: guards are a closed set in principle but nothing enforces it.
-"""
+"""Approval friction: what was asked for and how it was answered."""
 
 from __future__ import annotations
 

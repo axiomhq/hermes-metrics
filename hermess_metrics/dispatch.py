@@ -1,10 +1,4 @@
-"""Hand-off from the agent loop to background work.
-
-Hermes invokes observer hooks synchronously on the thread running the turn, so
-work submitted here is picked up by a worker thread and the caller returns
-immediately. Submission reports whether the item was taken rather than raising,
-because a hook that raises is swallowed into a log warning.
-"""
+"""Bounded queue handing hook work to a worker thread."""
 
 from __future__ import annotations
 

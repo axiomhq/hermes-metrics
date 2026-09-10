@@ -1,8 +1,4 @@
-"""Exporter construction.
-
-Axiom's metrics route accepts protobuf only, so every signal uses the
-protobuf-over-HTTP exporter rather than mixing encodings.
-"""
+"""Exporter construction, one per configured signal."""
 
 from __future__ import annotations
 
@@ -77,8 +73,7 @@ def test_service_name_is_configurable() -> None:
     assert transport.build(cfg).resource.attributes["service.name"] == "hermes-prod"
 
 
-# Axiom detects counter restarts from cumulative series; delta temporality
-# would strip the signal the backend relies on.
+# Axiom detects counter restarts from cumulative series.
 def test_counters_export_cumulatively() -> None:
     from opentelemetry.sdk.metrics import Counter
     from opentelemetry.sdk.metrics.export import AggregationTemporality

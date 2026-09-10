@@ -1,10 +1,4 @@
-"""Log records built from Hermes observer hooks.
-
-Records carry the Hermes identifiers, so a record found in the logs dataset
-names the session, turn and request whose span holds the rest of the story.
-Raw provider and tool error text is content and is governed by the redactor;
-the error class, status code and identifiers are metadata and always present.
-"""
+"""Builds log records for provider and tool failures."""
 
 from __future__ import annotations
 
