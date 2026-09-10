@@ -186,7 +186,7 @@ def test_hook_callbacks_never_raise(runtime_and_sinks) -> None:
 def test_start_builds_real_exporters_from_config() -> None:
     runtime = Runtime.start(Config.from_env(ALL_ENV))
     try:
-        assert len(runtime.recorders) == 7
+        assert len(runtime.recorders) == 8
         assert len(runtime.providers) == 3
     finally:
         runtime.shutdown(2.0)

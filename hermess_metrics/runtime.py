@@ -19,6 +19,8 @@ from .events import (
     KIND_DIAGNOSTIC,
     KIND_SESSION_END,
     KIND_SESSION_START,
+    KIND_SUBAGENT_START,
+    KIND_SUBAGENT_STOP,
     KIND_TOOL_CALL,
     KIND_TURN_END,
     KIND_TURN_START,
@@ -30,6 +32,7 @@ from .logs import LogRecorder
 from .metrics import MetricRecorder
 from .pricing import PriceRecorder
 from .skills import SkillInventory
+from .subagents import SubagentRecorder
 from .traces import TraceRecorder
 from .transport import Transport
 from .transport import build as build_transport
@@ -48,6 +51,8 @@ HOOK_KINDS = {
     "post_tool_call": KIND_TOOL_CALL,
     "pre_approval_request": KIND_APPROVAL_REQUEST,
     "post_approval_response": KIND_APPROVAL_RESPONSE,
+    "subagent_start": KIND_SUBAGENT_START,
+    "subagent_stop": KIND_SUBAGENT_STOP,
 }
 FLUSH_HOOK = "on_session_finalize"
 SHUTDOWN_TIMEOUT = 5.0
@@ -100,6 +105,7 @@ class Runtime:
             recorders.append(ToolInventory(meter))
             recorders.append(SkillInventory(meter))
             recorders.append(ApprovalRecorder(meter))
+            recorders.append(SubagentRecorder(meter))
             HealthMetrics(meter, dispatcher)
 
         if SIGNAL_LOGS in transport.exporters:

@@ -16,4 +16,6 @@ provides_hooks:
   - post_tool_call
   - pre_approval_request
   - post_approval_response
+  - subagent_start
+  - subagent_stop
 provides_tools: []
