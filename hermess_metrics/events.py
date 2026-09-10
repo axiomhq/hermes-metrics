@@ -24,5 +24,13 @@ def stamp(kind: str, payload: Mapping[str, Any]) -> Event:
     return Event(kind, payload, time.time())
 
 
-# Recorders share one queue, so each sees every kind any of them submits and
-# consumes only the kinds it knows.
+# Recorders share one queue, so each sees every kind submitted and consumes
+# only the kinds it knows. Submission happens once per hook, above them.
+KIND_SESSION_START = "session_start"
+KIND_SESSION_END = "session_end"
+KIND_TURN_START = "turn_start"
+KIND_TURN_END = "turn_end"
+KIND_API_REQUEST = "api_request"
+KIND_API_ERROR = "api_error"
+KIND_TOOL_CALL = "tool_call"
+KIND_DIAGNOSTIC = "diagnostic"

@@ -15,8 +15,7 @@ from typing import Any
 from opentelemetry._logs import LogRecord, SeverityNumber
 from opentelemetry.sdk._logs import Logger
 
-from .dispatch import Dispatcher
-from .events import Event, stamp
+from .events import Event
 from .redaction import CLASS_MESSAGES, CLASS_TOOL_IO, Redactor
 
 _IDENTIFIERS = (
@@ -41,19 +40,9 @@ def _identifiers(payload: Mapping[str, Any]) -> dict[str, Any]:
 class LogRecorder:
     """Turns hook payloads into log records."""
 
-    def __init__(self, logger: Logger, redactor: Redactor, dispatcher: Dispatcher[Any]) -> None:
+    def __init__(self, logger: Logger, redactor: Redactor) -> None:
         self._logger = logger
         self._redactor = redactor
-        self._dispatcher = dispatcher
-
-    def api_request_error(self, **payload: Any) -> None:
-        self._dispatcher.submit(stamp("api_error", payload))
-
-    def post_tool_call(self, **payload: Any) -> None:
-        self._dispatcher.submit(stamp("tool_call", payload))
-
-    def diagnostic(self, message: str, **attributes: Any) -> None:
-        self._dispatcher.submit(stamp("diagnostic", {"message": message, **attributes}))
 
     def handle(self, event: Any) -> None:
         if not isinstance(event, Event):

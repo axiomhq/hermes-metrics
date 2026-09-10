@@ -15,8 +15,7 @@ from typing import Any
 from opentelemetry.metrics import Meter
 
 from .billing import billing_mode
-from .dispatch import Dispatcher
-from .events import Event, stamp
+from .events import Event
 
 # Hermes reports api_duration as a difference of two time.time() calls, so the
 # timestamps are the dependable source for elapsed seconds.
@@ -58,8 +57,7 @@ def _text(payload: Mapping[str, Any], key: str, fallback: str = "unknown") -> st
 class MetricRecorder:
     """Turns hook payloads into counters and histograms."""
 
-    def __init__(self, meter: Meter, dispatcher: Dispatcher[Any]) -> None:
-        self._dispatcher = dispatcher
+    def __init__(self, meter: Meter) -> None:
         self._duration = meter.create_histogram(
             "gen_ai.client.operation.duration",
             unit="s",
@@ -90,18 +88,6 @@ class MetricRecorder:
             unit="{session}",
             description="Sessions by outcome",
         )
-
-    def post_api_request(self, **payload: Any) -> None:
-        self._dispatcher.submit(stamp("api_request", payload))
-
-    def api_request_error(self, **payload: Any) -> None:
-        self._dispatcher.submit(stamp("api_error", payload))
-
-    def post_tool_call(self, **payload: Any) -> None:
-        self._dispatcher.submit(stamp("tool_call", payload))
-
-    def on_session_end(self, **payload: Any) -> None:
-        self._dispatcher.submit(stamp("session_end", payload))
 
     def handle(self, event: Any) -> None:
         if not isinstance(event, Event):

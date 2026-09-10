@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import threading
 import time
+from typing import Any
 
 import pytest
 from opentelemetry.sdk.trace import TracerProvider
@@ -20,6 +21,11 @@ from hermess_metrics.dispatch import Dispatcher
 from hermess_metrics.events import stamp
 from hermess_metrics.redaction import LEVEL_FULL, LEVEL_METADATA, MASK, Redactor
 from hermess_metrics.traces import TraceRecorder
+
+
+def send(dispatcher: Dispatcher[object], kind: str, **payload: Any) -> None:
+    assert dispatcher.submit(stamp(kind, payload))
+
 
 FLUSH = 5.0
 SESSION = "sess-1"
@@ -36,7 +42,6 @@ def recorder_and_spans(request: pytest.FixtureRequest):
     recorder = TraceRecorder(
         tracer=provider.get_tracer("hermess-metrics"),
         redactor=Redactor.for_level(level),
-        dispatcher=dispatcher,
     )
     dispatcher.start(recorder.handle)
     yield recorder, exporter, dispatcher
@@ -80,8 +85,15 @@ def _api_request(**overrides: object) -> dict[str, object]:
 
 def test_a_session_opens_and_closes_one_agent_span(recorder_and_spans) -> None:
     recorder, exporter, dispatcher = recorder_and_spans
-    recorder.on_session_start(session_id=SESSION, model="m", platform="cli")
-    recorder.on_session_end(session_id=SESSION, completed=True, interrupted=False, platform="cli")
+    send(dispatcher, "session_start", session_id=SESSION, model="m", platform="cli")
+    send(
+        dispatcher,
+        "session_end",
+        session_id=SESSION,
+        completed=True,
+        interrupted=False,
+        platform="cli",
+    )
     spans = _drain(dispatcher, exporter)
     agent = spans["invoke_agent hermes"]
     assert agent.attributes["gen_ai.operation.name"] == "invoke_agent"
@@ -90,7 +102,7 @@ def test_a_session_opens_and_closes_one_agent_span(recorder_and_spans) -> None:
 
 def test_an_api_request_becomes_a_chat_span_named_for_the_model(recorder_and_spans) -> None:
     recorder, exporter, dispatcher = recorder_and_spans
-    recorder.post_api_request(**_api_request())
+    send(dispatcher, "api_request", **_api_request())
     spans = _drain(dispatcher, exporter)
     chat = spans["chat claude-opus-5"]
     assert chat.attributes["gen_ai.operation.name"] == "chat"
@@ -101,7 +113,7 @@ def test_an_api_request_becomes_a_chat_span_named_for_the_model(recorder_and_spa
 
 def test_token_usage_lands_on_the_chat_span(recorder_and_spans) -> None:
     recorder, exporter, dispatcher = recorder_and_spans
-    recorder.post_api_request(**_api_request())
+    send(dispatcher, "api_request", **_api_request())
     chat = _drain(dispatcher, exporter)["chat claude-opus-5"]
     assert chat.attributes["gen_ai.usage.input_tokens"] == 100
     assert chat.attributes["gen_ai.usage.output_tokens"] == 20
@@ -111,7 +123,7 @@ def test_token_usage_lands_on_the_chat_span(recorder_and_spans) -> None:
 
 def test_the_chat_span_uses_the_duration_the_hook_reported(recorder_and_spans) -> None:
     recorder, exporter, dispatcher = recorder_and_spans
-    recorder.post_api_request(**_api_request())
+    send(dispatcher, "api_request", **_api_request())
     chat = _drain(dispatcher, exporter)["chat claude-opus-5"]
     elapsed_ms = (chat.end_time - chat.start_time) / 1_000_000
     assert 1230 < elapsed_ms < 1240
@@ -119,7 +131,7 @@ def test_the_chat_span_uses_the_duration_the_hook_reported(recorder_and_spans) -
 
 def test_axiom_required_attributes_are_present(recorder_and_spans) -> None:
     recorder, exporter, dispatcher = recorder_and_spans
-    recorder.post_api_request(**_api_request())
+    send(dispatcher, "api_request", **_api_request())
     chat = _drain(dispatcher, exporter)["chat claude-opus-5"]
     for name in ("gen_ai.operation.name", "gen_ai.capability.name", "gen_ai.step.name"):
         assert chat.attributes[name]
@@ -129,7 +141,9 @@ def test_axiom_required_attributes_are_present(recorder_and_spans) -> None:
 
 def test_a_tool_call_becomes_an_execute_tool_span(recorder_and_spans) -> None:
     recorder, exporter, dispatcher = recorder_and_spans
-    recorder.post_tool_call(
+    send(
+        dispatcher,
+        "tool_call",
         tool_name="shell_exec",
         args={"command": "ls"},
         result="a b c",
@@ -149,7 +163,9 @@ def test_a_tool_call_becomes_an_execute_tool_span(recorder_and_spans) -> None:
 
 def test_a_failed_tool_call_is_marked_as_an_error(recorder_and_spans) -> None:
     recorder, exporter, dispatcher = recorder_and_spans
-    recorder.post_tool_call(
+    send(
+        dispatcher,
+        "tool_call",
         tool_name="shell_exec",
         args={},
         result="",
@@ -169,7 +185,9 @@ def test_a_failed_tool_call_is_marked_as_an_error(recorder_and_spans) -> None:
 def test_a_provider_error_becomes_a_chat_span_marked_failed(recorder_and_spans) -> None:
     recorder, exporter, dispatcher = recorder_and_spans
     now = time.time()
-    recorder.api_request_error(
+    send(
+        dispatcher,
+        "api_error",
         session_id=SESSION,
         turn_id=TURN,
         api_request_id="req-2",
@@ -195,11 +213,18 @@ def test_a_provider_error_becomes_a_chat_span_marked_failed(recorder_and_spans) 
 
 def test_chat_and_tool_spans_join_the_session_trace(recorder_and_spans) -> None:
     recorder, exporter, dispatcher = recorder_and_spans
-    recorder.on_session_start(session_id=SESSION, model="m", platform="cli")
-    recorder.pre_llm_call(session_id=SESSION, turn_id=TURN, model="m", platform="cli")
-    recorder.post_api_request(**_api_request())
-    recorder.post_llm_call(session_id=SESSION, turn_id=TURN, model="m", platform="cli")
-    recorder.on_session_end(session_id=SESSION, completed=True, interrupted=False, platform="cli")
+    send(dispatcher, "session_start", session_id=SESSION, model="m", platform="cli")
+    send(dispatcher, "turn_start", session_id=SESSION, turn_id=TURN, model="m", platform="cli")
+    send(dispatcher, "api_request", **_api_request())
+    send(dispatcher, "turn_end", session_id=SESSION, turn_id=TURN, model="m", platform="cli")
+    send(
+        dispatcher,
+        "session_end",
+        session_id=SESSION,
+        completed=True,
+        interrupted=False,
+        platform="cli",
+    )
     spans = _drain(dispatcher, exporter)
     agent = spans["invoke_agent hermes"]
     turn = spans["turn"]
@@ -211,8 +236,10 @@ def test_chat_and_tool_spans_join_the_session_trace(recorder_and_spans) -> None:
 
 def test_the_metadata_level_keeps_prompts_and_tool_io_off_the_span(recorder_and_spans) -> None:
     recorder, exporter, dispatcher = recorder_and_spans
-    recorder.post_api_request(**_api_request())
-    recorder.post_tool_call(
+    send(dispatcher, "api_request", **_api_request())
+    send(
+        dispatcher,
+        "tool_call",
         tool_name="shell_exec",
         args={"command": "cat /etc/passwd"},
         result="root:x:0:0",
@@ -232,7 +259,9 @@ def test_the_metadata_level_keeps_prompts_and_tool_io_off_the_span(recorder_and_
 @pytest.mark.parametrize("recorder_and_spans", [LEVEL_FULL], indirect=True)
 def test_the_full_level_carries_content_with_credentials_masked(recorder_and_spans) -> None:
     recorder, exporter, dispatcher = recorder_and_spans
-    recorder.post_tool_call(
+    send(
+        dispatcher,
+        "tool_call",
         tool_name="http_get",
         args={"url": "https://x", "api_key": "sk-live-secret"},
         result="ok",
@@ -252,7 +281,7 @@ def test_the_full_level_carries_content_with_credentials_masked(recorder_and_spa
 
 def test_a_hook_missing_every_optional_field_still_produces_a_span(recorder_and_spans) -> None:
     recorder, exporter, dispatcher = recorder_and_spans
-    recorder.post_api_request(session_id=SESSION)
+    send(dispatcher, "api_request", session_id=SESSION)
     spans = _drain(dispatcher, exporter)
     assert any(name.startswith("chat") for name in spans)
 
@@ -260,7 +289,7 @@ def test_a_hook_missing_every_optional_field_still_produces_a_span(recorder_and_
 def test_live_span_state_is_bounded(recorder_and_spans) -> None:
     recorder, exporter, dispatcher = recorder_and_spans
     for index in range(recorder.max_live * 3):
-        recorder.on_session_start(session_id=f"s-{index}", model="m", platform="cli")
+        send(dispatcher, "session_start", session_id=f"s-{index}", model="m", platform="cli")
         if index % 64 == 0:
             assert dispatcher.flush(FLUSH)
     assert dispatcher.flush(FLUSH)
@@ -277,15 +306,22 @@ def test_a_foreign_queue_item_is_ignored(recorder_and_spans) -> None:
 
 def test_ending_a_session_that_never_started_is_harmless(recorder_and_spans) -> None:
     recorder, exporter, dispatcher = recorder_and_spans
-    recorder.on_session_end(session_id="never-seen", completed=True, interrupted=False)
+    send(dispatcher, "session_end", session_id="never-seen", completed=True, interrupted=False)
     assert dispatcher.flush(FLUSH)
     assert exporter.get_finished_spans() == ()
 
 
 def test_an_interrupted_session_is_marked(recorder_and_spans) -> None:
     recorder, exporter, dispatcher = recorder_and_spans
-    recorder.on_session_start(session_id=SESSION, model="m", platform="cli")
-    recorder.on_session_end(session_id=SESSION, completed=False, interrupted=True, platform="cli")
+    send(dispatcher, "session_start", session_id=SESSION, model="m", platform="cli")
+    send(
+        dispatcher,
+        "session_end",
+        session_id=SESSION,
+        completed=False,
+        interrupted=True,
+        platform="cli",
+    )
     agent = _drain(dispatcher, exporter)["invoke_agent hermes"]
     assert agent.attributes["hermes.interrupted"] is True
 
@@ -293,7 +329,7 @@ def test_an_interrupted_session_is_marked(recorder_and_spans) -> None:
 @pytest.mark.parametrize("recorder_and_spans", [LEVEL_FULL], indirect=True)
 def test_the_full_level_carries_the_model_output(recorder_and_spans) -> None:
     recorder, exporter, dispatcher = recorder_and_spans
-    recorder.post_api_request(**_api_request())
+    send(dispatcher, "api_request", **_api_request())
     chat = _drain(dispatcher, exporter)["chat claude-opus-5"]
     assert chat.attributes["gen_ai.output.messages"] == "hello there"
 
@@ -307,7 +343,6 @@ def test_structural_spans_start_when_the_hook_fired_not_when_the_worker_ran() ->
     recorder = TraceRecorder(
         tracer=provider.get_tracer("hermess-metrics"),
         redactor=Redactor.for_level(LEVEL_METADATA),
-        dispatcher=dispatcher,
     )
     release = threading.Event()
 
@@ -318,12 +353,12 @@ def test_structural_spans_start_when_the_hook_fired_not_when_the_worker_ran() ->
     dispatcher.start(gated)
     try:
         hook_fired_at = time.time()
-        recorder.on_session_start(session_id=SESSION, model="m", platform="cli")
-        recorder.pre_llm_call(session_id=SESSION, turn_id=TURN, model="m", platform="cli")
+        send(dispatcher, "session_start", session_id=SESSION, model="m", platform="cli")
+        send(dispatcher, "turn_start", session_id=SESSION, turn_id=TURN, model="m", platform="cli")
         time.sleep(0.3)
         release.set()
-        recorder.post_llm_call(session_id=SESSION, turn_id=TURN, model="m", platform="cli")
-        recorder.on_session_end(session_id=SESSION, completed=True, interrupted=False)
+        send(dispatcher, "turn_end", session_id=SESSION, turn_id=TURN, model="m", platform="cli")
+        send(dispatcher, "session_end", session_id=SESSION, completed=True, interrupted=False)
         spans = _drain(dispatcher, exporter)
     finally:
         release.set()
@@ -336,7 +371,7 @@ def test_structural_spans_start_when_the_hook_fired_not_when_the_worker_ran() ->
 
 def test_the_billing_route_lands_on_the_chat_span(recorder_and_spans) -> None:
     recorder, exporter, dispatcher = recorder_and_spans
-    recorder.post_api_request(**_api_request())
+    send(dispatcher, "api_request", **_api_request())
     chat = _drain(dispatcher, exporter)["chat claude-opus-5"]
     assert chat.attributes["hermes.billing_mode"] == "official_docs_snapshot"
 

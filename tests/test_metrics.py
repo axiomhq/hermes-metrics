@@ -17,6 +17,11 @@ from hermess_metrics.dispatch import Dispatcher
 from hermess_metrics.events import stamp
 from hermess_metrics.metrics import MetricRecorder
 
+
+def send(dispatcher: Dispatcher[object], kind: str, **payload: Any) -> None:
+    assert dispatcher.submit(stamp(kind, payload))
+
+
 FLUSH = 5.0
 SESSION = "sess-cardinality-canary"
 TURN = "turn-cardinality-canary"
@@ -29,7 +34,7 @@ def recorder_and_reader():
     reader = InMemoryMetricReader()
     provider = MeterProvider(metric_readers=[reader])
     dispatcher: Dispatcher[object] = Dispatcher(capacity=256)
-    recorder = MetricRecorder(meter=provider.get_meter("hermess-metrics"), dispatcher=dispatcher)
+    recorder = MetricRecorder(meter=provider.get_meter("hermess-metrics"))
     dispatcher.start(recorder.handle)
     yield recorder, reader, dispatcher
     dispatcher.stop(FLUSH)
@@ -74,7 +79,7 @@ def _api_request(**overrides: Any) -> dict[str, Any]:
 
 def test_an_api_request_records_its_duration_in_seconds(recorder_and_reader) -> None:
     recorder, reader, dispatcher = recorder_and_reader
-    recorder.post_api_request(**_api_request())
+    send(dispatcher, "api_request", **_api_request())
     assert dispatcher.flush(FLUSH)
     point = _points(reader)["gen_ai.client.operation.duration"][0]
     assert point.count == 1
@@ -87,7 +92,11 @@ def test_duration_comes_from_the_timestamps_not_the_reported_field(recorder_and_
     """Hermes documents api_duration in milliseconds and reports it in seconds."""
     recorder, reader, dispatcher = recorder_and_reader
     now = time.time()
-    recorder.post_api_request(**_api_request(started_at=now, ended_at=now + 2.0, api_duration=999))
+    send(
+        dispatcher,
+        "api_request",
+        **_api_request(started_at=now, ended_at=now + 2.0, api_duration=999),
+    )
     assert dispatcher.flush(FLUSH)
     point = _points(reader)["gen_ai.client.operation.duration"][0]
     assert 1.99 < point.sum < 2.01
@@ -95,7 +104,7 @@ def test_duration_comes_from_the_timestamps_not_the_reported_field(recorder_and_
 
 def test_every_token_bucket_is_counted_separately(recorder_and_reader) -> None:
     recorder, reader, dispatcher = recorder_and_reader
-    recorder.post_api_request(**_api_request())
+    send(dispatcher, "api_request", **_api_request())
     assert dispatcher.flush(FLUSH)
     by_type = {
         point.attributes["gen_ai.token.type"]: point.value
@@ -112,7 +121,7 @@ def test_every_token_bucket_is_counted_separately(recorder_and_reader) -> None:
 
 def test_a_successful_request_counts_as_ok(recorder_and_reader) -> None:
     recorder, reader, dispatcher = recorder_and_reader
-    recorder.post_api_request(**_api_request())
+    send(dispatcher, "api_request", **_api_request())
     assert dispatcher.flush(FLUSH)
     point = _points(reader)["hermes.gen_ai.requests"][0]
     assert point.value == 1
@@ -123,7 +132,9 @@ def test_a_successful_request_counts_as_ok(recorder_and_reader) -> None:
 def test_a_provider_error_counts_by_reason_and_status(recorder_and_reader) -> None:
     recorder, reader, dispatcher = recorder_and_reader
     now = time.time()
-    recorder.api_request_error(
+    send(
+        dispatcher,
+        "api_error",
         session_id=SESSION,
         turn_id=TURN,
         api_request_id=REQUEST,
@@ -148,7 +159,9 @@ def test_a_provider_error_counts_by_reason_and_status(recorder_and_reader) -> No
 
 def test_a_tool_call_records_duration_and_a_count(recorder_and_reader) -> None:
     recorder, reader, dispatcher = recorder_and_reader
-    recorder.post_tool_call(
+    send(
+        dispatcher,
+        "tool_call",
         tool_name="shell_exec",
         args={"command": "ls"},
         result="ok",
@@ -173,7 +186,9 @@ def test_a_tool_call_records_duration_and_a_count(recorder_and_reader) -> None:
 
 def test_a_failed_tool_call_carries_its_error_type(recorder_and_reader) -> None:
     recorder, reader, dispatcher = recorder_and_reader
-    recorder.post_tool_call(
+    send(
+        dispatcher,
+        "tool_call",
         tool_name="shell_exec",
         args={},
         result="",
@@ -194,8 +209,22 @@ def test_a_failed_tool_call_carries_its_error_type(recorder_and_reader) -> None:
 
 def test_sessions_are_counted_by_outcome(recorder_and_reader) -> None:
     recorder, reader, dispatcher = recorder_and_reader
-    recorder.on_session_end(session_id=SESSION, completed=True, interrupted=False, platform="cli")
-    recorder.on_session_end(session_id=SESSION, completed=False, interrupted=True, platform="cli")
+    send(
+        dispatcher,
+        "session_end",
+        session_id=SESSION,
+        completed=True,
+        interrupted=False,
+        platform="cli",
+    )
+    send(
+        dispatcher,
+        "session_end",
+        session_id=SESSION,
+        completed=False,
+        interrupted=True,
+        platform="cli",
+    )
     assert dispatcher.flush(FLUSH)
     by_outcome = {
         point.attributes["hermes.outcome"]: point.value
@@ -206,7 +235,7 @@ def test_sessions_are_counted_by_outcome(recorder_and_reader) -> None:
 
 def test_a_request_without_usage_still_records_a_duration(recorder_and_reader) -> None:
     recorder, reader, dispatcher = recorder_and_reader
-    recorder.post_api_request(**_api_request(usage=None))
+    send(dispatcher, "api_request", **_api_request(usage=None))
     assert dispatcher.flush(FLUSH)
     points = _points(reader)
     assert points["gen_ai.client.operation.duration"][0].count == 1
@@ -218,8 +247,10 @@ def test_a_request_without_usage_still_records_a_duration(recorder_and_reader) -
 # on spans, which are exported and released.
 def test_no_identifier_ever_reaches_a_metric_attribute(recorder_and_reader) -> None:
     recorder, reader, dispatcher = recorder_and_reader
-    recorder.post_api_request(**_api_request())
-    recorder.post_tool_call(
+    send(dispatcher, "api_request", **_api_request())
+    send(
+        dispatcher,
+        "tool_call",
         tool_name="shell_exec",
         args={},
         result="",
@@ -232,7 +263,14 @@ def test_no_identifier_ever_reaches_a_metric_attribute(recorder_and_reader) -> N
         error_message=None,
         platform="cli",
     )
-    recorder.on_session_end(session_id=SESSION, completed=True, interrupted=False, platform="cli")
+    send(
+        dispatcher,
+        "session_end",
+        session_id=SESSION,
+        completed=True,
+        interrupted=False,
+        platform="cli",
+    )
     assert dispatcher.flush(FLUSH)
     seen = {
         str(value)
@@ -253,7 +291,7 @@ def test_a_foreign_queue_item_is_ignored(recorder_and_reader) -> None:
 
 def test_a_request_with_no_model_at_all_is_still_counted(recorder_and_reader) -> None:
     recorder, reader, dispatcher = recorder_and_reader
-    recorder.post_api_request(**_api_request(model=None, response_model=None))
+    send(dispatcher, "api_request", **_api_request(model=None, response_model=None))
     assert dispatcher.flush(FLUSH)
     point = _points(reader)["gen_ai.client.operation.duration"][0]
     assert point.attributes["gen_ai.request.model"] == "unknown"
@@ -261,21 +299,25 @@ def test_a_request_with_no_model_at_all_is_still_counted(recorder_and_reader) ->
 
 def test_the_reported_duration_is_used_when_timestamps_are_absent(recorder_and_reader) -> None:
     recorder, reader, dispatcher = recorder_and_reader
-    recorder.post_api_request(**_api_request(started_at=None, ended_at=None, api_duration=0.5))
+    send(
+        dispatcher, "api_request", **_api_request(started_at=None, ended_at=None, api_duration=0.5)
+    )
     assert dispatcher.flush(FLUSH)
     assert 0.49 < _points(reader)["gen_ai.client.operation.duration"][0].sum < 0.51
 
 
 def test_a_request_with_neither_timestamps_nor_duration_records_zero(recorder_and_reader) -> None:
     recorder, reader, dispatcher = recorder_and_reader
-    recorder.post_api_request(**_api_request(started_at=None, ended_at=None, api_duration=None))
+    send(
+        dispatcher, "api_request", **_api_request(started_at=None, ended_at=None, api_duration=None)
+    )
     assert dispatcher.flush(FLUSH)
     assert _points(reader)["gen_ai.client.operation.duration"][0].sum == 0.0
 
 
 def test_the_billing_route_is_a_dimension(recorder_and_reader) -> None:
     recorder, reader, dispatcher = recorder_and_reader
-    recorder.post_api_request(**_api_request())
+    send(dispatcher, "api_request", **_api_request())
     assert dispatcher.flush(FLUSH)
     point = _points(reader)["gen_ai.client.operation.duration"][0]
     assert point.attributes["hermes.billing_mode"] == "official_docs_snapshot"

@@ -10,7 +10,6 @@ the recorder happened to run.
 from __future__ import annotations
 
 import logging
-import time
 from collections import OrderedDict
 from collections.abc import Mapping
 from typing import Any
@@ -20,8 +19,7 @@ from opentelemetry.context import Context
 from opentelemetry.trace import Span, SpanKind, Status, StatusCode
 
 from .billing import billing_mode
-from .dispatch import Dispatcher
-from .events import Event, stamp
+from .events import Event
 from .redaction import CLASS_MESSAGES, CLASS_TOOL_IO, Redactor
 
 SCHEMA_URL = "https://axiom.co/ai/schemas/0.0.2"
@@ -65,12 +63,10 @@ class TraceRecorder:
         self,
         tracer: trace_api.Tracer,
         redactor: Redactor,
-        dispatcher: Dispatcher[Any],
         max_live: int = DEFAULT_MAX_LIVE,
     ) -> None:
         self._tracer = tracer
         self._redactor = redactor
-        self._dispatcher = dispatcher
         self._max_live = max(1, max_live)
         self._sessions: OrderedDict[str, Span] = OrderedDict()
         self._turns: OrderedDict[str, Span] = OrderedDict()
@@ -82,30 +78,6 @@ class TraceRecorder:
     @property
     def live_session_count(self) -> int:
         return len(self._sessions)
-
-    def on_session_start(self, **payload: Any) -> None:
-        self._submit("session_start", payload)
-
-    def on_session_end(self, **payload: Any) -> None:
-        self._submit("session_end", payload)
-
-    def pre_llm_call(self, **payload: Any) -> None:
-        self._submit("turn_start", payload)
-
-    def post_llm_call(self, **payload: Any) -> None:
-        self._submit("turn_end", payload)
-
-    def post_api_request(self, **payload: Any) -> None:
-        self._submit("api_request", payload)
-
-    def api_request_error(self, **payload: Any) -> None:
-        self._submit("api_error", payload)
-
-    def post_tool_call(self, **payload: Any) -> None:
-        self._submit("tool_call", payload)
-
-    def _submit(self, kind: str, payload: Mapping[str, Any]) -> None:
-        self._dispatcher.submit(stamp(kind, payload))
 
     def handle(self, event: Any) -> None:
         if not isinstance(event, Event):
@@ -264,7 +236,7 @@ class TraceRecorder:
         tool_name = str(payload.get("tool_name") or "")
         duration_ms = payload.get("duration_ms")
         elapsed = float(duration_ms) / 1000.0 if isinstance(duration_ms, (int, float)) else 0.0
-        ended_at = time.time()
+        ended_at = event.observed_at
         parent = self._turns.get(str(payload.get("turn_id") or "")) or self._sessions.get(
             str(payload.get("session_id") or "")
         )
