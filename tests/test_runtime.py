@@ -200,3 +200,20 @@ def test_plugin_health_is_published_alongside_the_metrics(runtime_and_sinks) -> 
     assert runtime.flush(5.0)
     assert runtime.dispatcher.stats().accepted == 1
     assert runtime.dispatcher.depth == 0
+
+
+def test_container_stats_are_wired_only_when_enabled() -> None:
+    for enabled in (False, True):
+        env = dict(ALL_ENV)
+        if enabled:
+            env["HERMES_AXIOM_CONTAINER_STATS"] = "1"
+        config = Config.from_env(env)
+        assert config.container_stats is enabled
+        exporters: dict[str, Any] = {"metrics": _NullMetricExporter()}
+        runtime = Runtime.build(
+            config, Transport(exporters=exporters, resource=Resource.create({}))
+        )
+        try:
+            assert runtime.flush(2.0)
+        finally:
+            runtime.shutdown(2.0)

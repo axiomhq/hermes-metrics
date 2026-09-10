@@ -10,6 +10,7 @@ from typing import Any
 
 from .approvals import ApprovalRecorder
 from .config import SIGNAL_LOGS, SIGNAL_METRICS, SIGNAL_TRACES, Config
+from .containers import ContainerStats
 from .dispatch import Dispatcher
 from .events import (
     KIND_API_ERROR,
@@ -109,6 +110,8 @@ class Runtime:
             recorders.append(SubagentRecorder(meter))
             recorders.append(TurnRecorder(meter))
             HealthMetrics(meter, dispatcher)
+            if config.container_stats:
+                ContainerStats(meter)
 
         if SIGNAL_LOGS in transport.exporters:
             provider_l = LoggerProvider(resource=transport.resource)

@@ -114,3 +114,8 @@ def test_an_unknown_redaction_level_does_not_widen_capture() -> None:
 def test_max_chars_is_configurable_and_falls_back_when_nonsense() -> None:
     assert Config.from_env({"HERMES_AXIOM_MAX_CHARS": "500"}).max_chars == 500
     assert Config.from_env({"HERMES_AXIOM_MAX_CHARS": "-1"}).max_chars == 12000
+
+
+def test_container_stats_are_off_unless_asked_for() -> None:
+    assert Config.from_env({}).container_stats is False
+    assert Config.from_env({"HERMES_AXIOM_CONTAINER_STATS": "true"}).container_stats is True

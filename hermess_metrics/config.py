@@ -20,6 +20,7 @@ ENV_SERVICE_NAME = ENV_PREFIX + "SERVICE_NAME"
 ENV_QUEUE_CAPACITY = ENV_PREFIX + "QUEUE_CAPACITY"
 ENV_REDACTION = ENV_PREFIX + "REDACTION"
 ENV_MAX_CHARS = ENV_PREFIX + "MAX_CHARS"
+ENV_CONTAINER_STATS = ENV_PREFIX + "CONTAINER_STATS"
 ENV_DEBUG = ENV_PREFIX + "DEBUG"
 
 DEFAULT_DOMAIN = "api.axiom.co"
@@ -85,6 +86,7 @@ class Config:
     queue_capacity: int = DEFAULT_CAPACITY
     redaction: str = DEFAULT_LEVEL
     max_chars: int = DEFAULT_MAX_CHARS
+    container_stats: bool = False
     debug: bool = False
 
     @staticmethod
@@ -100,6 +102,7 @@ class Config:
                 ENV_QUEUE_CAPACITY,
                 ENV_REDACTION,
                 ENV_MAX_CHARS,
+                ENV_CONTAINER_STATS,
                 ENV_DEBUG,
             }
         )
@@ -117,6 +120,7 @@ class Config:
             queue_capacity=_positive_int(_text(source, ENV_QUEUE_CAPACITY), DEFAULT_CAPACITY),
             redaction=Redactor.for_level(_text(source, ENV_REDACTION)).level,
             max_chars=_positive_int(_text(source, ENV_MAX_CHARS), DEFAULT_MAX_CHARS),
+            container_stats=_text(source, ENV_CONTAINER_STATS).lower() in _TRUTHY,
             debug=_text(source, ENV_DEBUG).lower() in _TRUTHY,
         )
 
