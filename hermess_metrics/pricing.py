@@ -15,6 +15,15 @@ from .events import KIND_API_ERROR, KIND_API_REQUEST, Event
 MAX_TRACKED_MODELS = 64
 PRICED_ROUTES = frozenset({"official_docs_snapshot", "subscription_included"})
 
+# Reasoning tokens are already inside output_tokens, so charging them again would double count.
+_BILLED = (
+    ("input_tokens", "input_token_cost", "input"),
+    ("output_tokens", "output_token_cost", "output"),
+    ("cache_read_tokens", "cache_read_token_cost", "cache_read"),
+    ("cache_write_tokens", "cache_write_token_cost", "cache_write"),
+)
+_PER_MILLION = 1_000_000
+
 # Rates are per million tokens, the unit every published price list quotes.
 _RATE_FIELDS = (
     ("input_token_cost", "input_cost_per_million"),
@@ -73,6 +82,11 @@ class PriceRecorder:
 
     def __init__(self, meter: Meter, max_tracked: int = MAX_TRACKED_MODELS) -> None:
         self._max_tracked = max(1, max_tracked)
+        self._cost = meter.create_counter(
+            "hermes.gen_ai.cost",
+            unit="USD",
+            description="Spend, from the published rate for the model",
+        )
         self._rates: dict[tuple[str, str], Rates] = {}
         self._skipped: set[tuple[str, str]] = set()
         for name, _ in _RATE_FIELDS:
@@ -96,7 +110,10 @@ class PriceRecorder:
         if not model:
             return
         key = (provider, model)
-        if key in self._rates or key in self._skipped:
+        if key in self._rates:
+            self._charge(self._rates[key], payload)
+            return
+        if key in self._skipped:
             return
         if len(self._rates) >= self._max_tracked:
             return
@@ -105,6 +122,24 @@ class PriceRecorder:
             self._skipped.add(key)
             return
         self._rates[key] = rates
+        self._charge(rates, payload)
+
+    def _charge(self, rates: Rates, payload: Mapping[str, Any]) -> None:
+        usage = payload.get("usage")
+        if not isinstance(usage, Mapping):
+            return
+        for source, rate_name, label in _BILLED:
+            count = usage.get(source)
+            rate = rates.values.get(rate_name)
+            if isinstance(count, int) and count and rate is not None:
+                self._cost.add(
+                    count * rate / _PER_MILLION,
+                    {
+                        "gen_ai.provider.name": rates.provider,
+                        "gen_ai.request.model": rates.model,
+                        "gen_ai.token.type": label,
+                    },
+                )
 
     def _callback(self, name: str) -> Any:
         def observe(options: CallbackOptions) -> Iterable[Observation]:

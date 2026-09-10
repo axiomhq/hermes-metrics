@@ -142,3 +142,66 @@ def test_a_route_with_an_empty_rate_set_is_treated_as_unpriced(
     recorder, reader = recorder_and_reader
     _see(recorder, MODEL, "anthropic")
     assert _points(reader) == {}
+
+
+USAGE = {
+    "input_tokens": 1_000_000,
+    "output_tokens": 100_000,
+    "cache_read_tokens": 2_000_000,
+    "cache_write_tokens": 400_000,
+    "reasoning_tokens": 50_000,
+}
+
+
+def _call(recorder: PriceRecorder, model: str, provider: str, usage: dict[str, Any]) -> None:
+    recorder.handle(stamp("api_request", {"model": model, "provider": provider, "usage": usage}))
+
+
+def test_spend_is_charged_per_token_bucket(recorder_and_reader) -> None:
+    recorder, reader = recorder_and_reader
+    _call(recorder, MODEL, "anthropic", USAGE)
+    by_type = {
+        point.attributes["gen_ai.token.type"]: point.value
+        for point in _points(reader)["hermes.gen_ai.cost"]
+    }
+    assert by_type["input"] == pytest.approx(5.00)
+    assert by_type["output"] == pytest.approx(2.50)
+    assert by_type["cache_read"] == pytest.approx(1.00)
+    assert by_type["cache_write"] == pytest.approx(2.50)
+
+
+def test_reasoning_tokens_are_not_charged_again(recorder_and_reader) -> None:
+    """They are already inside output_tokens."""
+    recorder, reader = recorder_and_reader
+    _call(recorder, MODEL, "anthropic", USAGE)
+    types = {
+        point.attributes["gen_ai.token.type"] for point in _points(reader)["hermes.gen_ai.cost"]
+    }
+    assert "reasoning" not in types
+
+
+def test_spend_accumulates_across_calls(recorder_and_reader) -> None:
+    recorder, reader = recorder_and_reader
+    _call(recorder, MODEL, "anthropic", {"input_tokens": 1_000_000})
+    _call(recorder, MODEL, "anthropic", {"input_tokens": 1_000_000})
+    point = _points(reader)["hermes.gen_ai.cost"][0]
+    assert point.value == pytest.approx(10.00)
+
+
+def test_a_subscription_route_charges_zero(recorder_and_reader) -> None:
+    """Zero is the answer, and saying it beats leaving a gap in the series."""
+    recorder, reader = recorder_and_reader
+    _call(recorder, "gpt-5-codex", "openai-codex", {"input_tokens": 1_000_000})
+    assert _points(reader)["hermes.gen_ai.cost"][0].value == 0.0
+
+
+def test_an_unpriced_model_is_not_charged(recorder_and_reader) -> None:
+    recorder, reader = recorder_and_reader
+    _call(recorder, "no-such-model", "anthropic", {"input_tokens": 1_000_000})
+    assert "hermes.gen_ai.cost" not in _points(reader)
+
+
+def test_a_call_without_usage_is_not_charged(recorder_and_reader) -> None:
+    recorder, reader = recorder_and_reader
+    _see(recorder, MODEL, "anthropic")
+    assert "hermes.gen_ai.cost" not in _points(reader)
