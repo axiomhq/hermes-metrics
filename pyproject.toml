@@ -1,0 +1,51 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "hermess-metrics"
+version = "0.1.0"
+description = "Ships Hermes agent-loop telemetry to Axiom as OpenTelemetry traces, metrics, and logs"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Heinz Gies", email = "heinz@project-fifo.net" }]
+dependencies = []
+
+[project.optional-dependencies]
+otlp = [
+  "opentelemetry-sdk>=1.30",
+  "opentelemetry-exporter-otlp-proto-http>=1.30",
+]
+dev = [
+  "pytest>=8",
+  "pytest-cov>=5",
+  "hypothesis>=6",
+  "ruff>=0.6",
+  "mypy>=1.11",
+  "pyyaml>=6",
+]
+
+# Hermes discovers pip-installed plugins through this group and calls
+# ``register`` on the module the entry point resolves to.
+[project.entry-points."hermes_agent.plugins"]
+hermess-metrics = "hermess_metrics"
+
+[tool.hatch.build.targets.wheel]
+packages = ["hermess_metrics"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["hermess_metrics"]
