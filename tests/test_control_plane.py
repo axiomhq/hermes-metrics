@@ -285,3 +285,19 @@ def test_an_unreadable_rate_limit_header_is_ignored() -> None:
 
     assert _resets_at(Headers()) is None
     assert _resets_at(None) is None
+
+
+def test_an_org_id_is_sent_when_given(server) -> None:
+    host, handler = server
+    handler.script["/v2/datasets"] = (200, {"name": "x"})
+    ControlPlane(domain=host, token="t", org="my-org-7", scheme="http", backoff=0.0).create_dataset(
+        "x", DATASET_KINDS["logs"]
+    )
+    assert handler.seen[0]["headers"]["x-axiom-org-id"] == "my-org-7"
+
+
+def test_no_org_header_is_sent_when_absent(server) -> None:
+    host, handler = server
+    handler.script["/v2/datasets"] = (200, {"name": "x"})
+    _plane(host, token="t").create_dataset("x", DATASET_KINDS["logs"])
+    assert "x-axiom-org-id" not in handler.seen[0]["headers"]

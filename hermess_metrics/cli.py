@@ -26,6 +26,7 @@ QUESTION = """Where should Hermes send its telemetry?
      can create datasets.
 
 Choose 1 or 2: """
+ORG_QUESTION = "Axiom org id (find it in the console URL; press enter if the token is org-scoped): "
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,7 @@ def build_parser(parser: argparse.ArgumentParser) -> None:
     actions = parser.add_subparsers(dest="axiom_action", required=True)
     setup = actions.add_parser("setup", help="Create datasets and a token, then save them")
     setup.add_argument("--token", help="API token for an org you already have")
+    setup.add_argument("--org", default="", help="Org id, if your token is not org-scoped")
     setup.add_argument("--provision", action="store_true", help="Provision a new temporary org")
     setup.add_argument("--prefix", default=DEFAULT_PREFIX, help="Dataset name prefix")
     setup.add_argument("--domain", default=DEFAULT_DOMAIN, help="Axiom API host")
@@ -62,20 +64,21 @@ def handle(args: argparse.Namespace) -> int:
     return run_setup(args)
 
 
-def _choose(ask: Callable[[str], str], args: argparse.Namespace) -> str | None:
-    """Return the org token to adopt, or None to provision a new org."""
+def _choose(ask: Callable[[str], str], args: argparse.Namespace) -> tuple[str | None, str]:
+    """Return the org token to adopt and its org id, or None to provision."""
     if args.token:
-        return str(args.token)
+        return str(args.token), str(args.org or "")
     if args.provision:
-        return None
+        return None, ""
     answer = ask(QUESTION).strip()
     if answer == CHOICE_PROVISION:
-        return None
+        return None, ""
     if answer == CHOICE_ADOPT:
         token = ask("Axiom API token: ").strip()
         if not token:
             raise ValueError("no token given")
-        return token
+        org = args.org or ask(ORG_QUESTION).strip()
+        return token, str(org)
     raise ValueError(f"expected {CHOICE_PROVISION} or {CHOICE_ADOPT}, got {answer!r}")
 
 
@@ -85,7 +88,7 @@ def run_setup(
     out: Callable[[str], None] = print,
 ) -> int:
     try:
-        org_token = _choose(ask, args)
+        org_token, org = _choose(ask, args)
     except (ValueError, EOFError, KeyboardInterrupt) as exc:
         out(f"Setup cancelled: {exc}")
         return 2

@@ -48,12 +48,14 @@ def provision(
     prefix: str = DEFAULT_PREFIX,
     region: str | None = None,
     org_token: str | None = None,
+    org: str = "",
 ) -> Provisioned:
     """Create the datasets and a scoped token, in a given org or a new one."""
-    org = None if org_token else plane.provision_org(name=prefix, region=region)
+    provisioned_org = None if org_token else plane.provision_org(name=prefix, region=region)
     admin = ControlPlane(
         domain=plane.domain,
-        token=org.token if org else str(org_token),
+        token=provisioned_org.token if provisioned_org else str(org_token),
+        org="" if provisioned_org else org,
         scheme=plane.scheme,
         timeout=plane.timeout,
         backoff=plane.backoff,
@@ -64,12 +66,12 @@ def provision(
     token = admin.create_ingest_token(TOKEN_NAME, list(datasets.values()), DESCRIPTION)
     return Provisioned(
         domain=plane.domain,
-        region=org.region if org else "",
+        region=provisioned_org.region if provisioned_org else "",
         datasets=datasets,
         token=token,
-        org_id=org.id if org else "",
-        expires_at=org.expires_at if org else "",
-        claim_url=org.claim_url if org else "",
+        org_id=provisioned_org.id if provisioned_org else org,
+        expires_at=provisioned_org.expires_at if provisioned_org else "",
+        claim_url=provisioned_org.claim_url if provisioned_org else "",
     )
 
 

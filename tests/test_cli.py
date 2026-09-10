@@ -68,6 +68,7 @@ def _args(host: str, target: Path, **overrides: Any) -> argparse.Namespace:
         "prefix": "hermes",
         "domain": host,
         "region": None,
+        "org": "",
         "env_file": str(target),
     }
     values.update(overrides)
@@ -141,7 +142,7 @@ def test_answering_two_asks_for_a_token(server, tmp_path, monkeypatch) -> None:
     host, handler = server
     _plain_http(monkeypatch)
     code = cli.run_setup(
-        _args(host, tmp_path / ".env"), ask=_answers(["2", "xaat-mine"]), out=_Recorder()
+        _args(host, tmp_path / ".env"), ask=_answers(["2", "xaat-mine", ""]), out=_Recorder()
     )
     assert code == 0
     assert "/v2/orgs/provision" not in [r["path"] for r in handler.seen]
@@ -318,3 +319,36 @@ def test_a_rate_limit_while_adopting_is_reported_plainly(
     cli.run_setup(_args(limited_server, tmp_path / ".env", token="xaat-mine"), ask=_never, out=out)
     assert out.lines[0].startswith("Setup failed:")
     assert "--token" not in "\n".join(out.lines)
+
+
+def test_the_org_is_asked_for_after_the_token(server, tmp_path, monkeypatch) -> None:
+    host, handler = server
+    _plain_http(monkeypatch)
+    asked: list[str] = []
+
+    def ask(prompt: str) -> str:
+        asked.append(prompt)
+        return ["2", "xaat-mine", "my-org-7"][len(asked) - 1]
+
+    assert cli.run_setup(_args(host, tmp_path / ".env"), ask=ask, out=_Recorder()) == 0
+    assert "org id" in asked[2]
+
+
+def test_an_empty_org_answer_is_allowed(server, tmp_path, monkeypatch) -> None:
+    host, _ = server
+    _plain_http(monkeypatch)
+    code = cli.run_setup(
+        _args(host, tmp_path / ".env"), ask=_answers(["2", "xaat-mine", ""]), out=_Recorder()
+    )
+    assert code == 0
+
+
+def test_the_org_flag_skips_the_org_question(server, tmp_path, monkeypatch) -> None:
+    host, _ = server
+    _plain_http(monkeypatch)
+    code = cli.run_setup(
+        _args(host, tmp_path / ".env", org="flagged-org"),
+        ask=_answers(["2", "xaat-mine"]),
+        out=_Recorder(),
+    )
+    assert code == 0

@@ -57,6 +57,7 @@ class ControlPlane:
 
     domain: str = DEFAULT_DOMAIN
     token: str = field(default="", repr=False)
+    org: str = ""
     scheme: str = "https"
     timeout: float = DEFAULT_TIMEOUT
     backoff: float = DEFAULT_BACKOFF
@@ -107,6 +108,8 @@ class ControlPlane:
         headers = {"Content-Type": "application/json"}
         if authenticated:
             headers["Authorization"] = f"Bearer {self.token}"
+            if self.org:
+                headers["X-Axiom-Org-Id"] = self.org
         last: AxiomError | None = None
         for attempt in range(MAX_ATTEMPTS):
             try:
