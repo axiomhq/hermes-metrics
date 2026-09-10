@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 """Plugin settings and per-signal destinations, read from the environment."""
 
 from __future__ import annotations

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 """The hermes axiom subcommand: set up telemetry and report its state."""
 
 from __future__ import annotations

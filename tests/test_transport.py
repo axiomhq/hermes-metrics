@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 """Exporter construction, one per configured signal."""
 
 from __future__ import annotations

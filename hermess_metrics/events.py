@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 """The stamped unit passed from a hook callback to the worker."""
 
 from __future__ import annotations

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 """Bounded queue handing hook work to a worker thread."""
 
 from __future__ import annotations

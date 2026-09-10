@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 """Approval friction: what was asked for and how it was answered."""
 
 from __future__ import annotations

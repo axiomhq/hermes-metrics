@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 """Builds spans from hook payloads in Axiom's generative AI conventions."""
 
 from __future__ import annotations

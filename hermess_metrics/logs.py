@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 """Builds log records for provider and tool failures."""
 
 from __future__ import annotations

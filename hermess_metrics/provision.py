@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 """One call that produces a working Axiom setup and a link."""
 
 from __future__ import annotations

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 """HTTP client for the Axiom endpoints setup needs."""
 
 from __future__ import annotations

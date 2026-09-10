@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 """Publishes the dispatcher's own accounting as metrics."""
 
 from __future__ import annotations

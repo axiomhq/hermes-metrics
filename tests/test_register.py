@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 """``register(ctx)`` is the single entry point Hermes calls at load time."""
 
 from __future__ import annotations

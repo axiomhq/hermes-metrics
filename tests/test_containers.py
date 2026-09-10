@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 """Host stats for the containers Hermes runs commands in."""
 
 from __future__ import annotations

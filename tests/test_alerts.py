@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 """The monitor pack setup creates."""
 
 from __future__ import annotations

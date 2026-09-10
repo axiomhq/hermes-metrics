@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 """Work done inside one turn."""
 
 from __future__ import annotations

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 """Publishes the registered tool list and per-tool call counts."""
 
 from __future__ import annotations

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 """Structural guards for the drop-in and pip install paths."""
 
 from __future__ import annotations

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 """What content leaves the machine at each level."""
 
 from __future__ import annotations

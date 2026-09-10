@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 """Ships Hermes agent-loop telemetry to Axiom as OpenTelemetry signals."""
 
 from __future__ import annotations

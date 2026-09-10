@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 """The installed skill list and per-skill load counts."""
 
 from __future__ import annotations

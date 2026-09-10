@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 """Settings read from the environment."""
 
 from __future__ import annotations

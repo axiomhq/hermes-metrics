@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 """Delegated subagent fan-out and outcomes."""
 
 from __future__ import annotations

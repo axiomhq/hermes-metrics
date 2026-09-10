@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 """Counters and histograms built from hook payloads."""
 
 from __future__ import annotations

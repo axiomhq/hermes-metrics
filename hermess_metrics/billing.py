@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 """Resolves how a provider call is billed."""
 
 from __future__ import annotations

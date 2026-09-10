@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 """Published token rates for the models in use."""
 
 from __future__ import annotations

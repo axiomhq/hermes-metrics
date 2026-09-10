@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 """Assembly of providers, recorders and hook subscriptions."""
 
 from __future__ import annotations

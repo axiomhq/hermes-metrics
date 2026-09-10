@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 """Builds one OTLP exporter per configured signal."""
 
 from __future__ import annotations

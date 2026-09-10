@@ -31,3 +31,8 @@ hermes plugins enable hermess-metrics
 
 Axiom requires a dedicated dataset per signal, and a metrics dataset must be
 created with the OpenTelemetry metrics kind.
+
+## Licence
+
+Dual licensed under either of Apache License 2.0 or MIT, at your option.
+See `LICENSE-APACHE` and `LICENSE-MIT`.

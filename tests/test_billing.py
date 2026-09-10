@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 """The billing route label attached to provider calls."""
 
 from __future__ import annotations
