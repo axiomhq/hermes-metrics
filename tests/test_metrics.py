@@ -14,6 +14,7 @@ from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import InMemoryMetricReader
 
 from hermess_metrics.dispatch import Dispatcher
+from hermess_metrics.events import stamp
 from hermess_metrics.metrics import MetricRecorder
 
 FLUSH = 5.0
@@ -278,3 +279,10 @@ def test_the_billing_route_is_a_dimension(recorder_and_reader) -> None:
     assert dispatcher.flush(FLUSH)
     point = _points(reader)["gen_ai.client.operation.duration"][0]
     assert point.attributes["hermes.billing_mode"] == "official_docs_snapshot"
+
+
+def test_an_event_kind_this_recorder_does_not_consume_is_ignored(recorder_and_reader) -> None:
+    recorder, reader, dispatcher = recorder_and_reader
+    assert dispatcher.submit(stamp("session_start", {"session_id": SESSION}))
+    assert dispatcher.flush(FLUSH)
+    assert dispatcher.stats().failed == 0

@@ -58,11 +58,13 @@ class LogRecorder:
     def handle(self, event: Any) -> None:
         if not isinstance(event, Event):
             return
-        {
+        handler = {
             "api_error": self._api_error,
             "tool_call": self._tool_call,
             "diagnostic": self._diagnostic,
-        }[event.kind](event)
+        }.get(event.kind)
+        if handler is not None:
+            handler(event)
 
     def _emit(
         self,

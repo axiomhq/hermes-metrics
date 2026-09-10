@@ -17,6 +17,7 @@ from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
 from hermess_metrics.dispatch import Dispatcher
+from hermess_metrics.events import stamp
 from hermess_metrics.redaction import LEVEL_FULL, LEVEL_METADATA, MASK, Redactor
 from hermess_metrics.traces import TraceRecorder
 
@@ -338,3 +339,11 @@ def test_the_billing_route_lands_on_the_chat_span(recorder_and_spans) -> None:
     recorder.post_api_request(**_api_request())
     chat = _drain(dispatcher, exporter)["chat claude-opus-5"]
     assert chat.attributes["hermes.billing_mode"] == "official_docs_snapshot"
+
+
+def test_an_event_kind_this_recorder_does_not_consume_is_ignored(recorder_and_spans) -> None:
+    recorder, exporter, dispatcher = recorder_and_spans
+    assert dispatcher.submit(stamp("diagnostic", {"message": "for someone else"}))
+    assert dispatcher.flush(FLUSH)
+    assert dispatcher.stats().failed == 0
+    assert exporter.get_finished_spans() == ()

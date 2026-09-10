@@ -106,12 +106,14 @@ class MetricRecorder:
     def handle(self, event: Any) -> None:
         if not isinstance(event, Event):
             return
-        {
+        handler = {
             "api_request": self._api_request,
             "api_error": self._api_error,
             "tool_call": self._tool_call,
             "session_end": self._session_end,
-        }[event.kind](event.payload)
+        }.get(event.kind)
+        if handler is not None:
+            handler(event.payload)
 
     def _provider_dimensions(self, payload: Mapping[str, Any]) -> dict[str, Any]:
         return {

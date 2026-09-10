@@ -19,6 +19,7 @@ from opentelemetry.sdk._logs.export import (
 )
 
 from hermess_metrics.dispatch import Dispatcher
+from hermess_metrics.events import stamp
 from hermess_metrics.logs import LogRecorder
 from hermess_metrics.redaction import LEVEL_FULL, LEVEL_METADATA, Redactor
 
@@ -184,3 +185,10 @@ def test_the_full_level_carries_the_tool_error_message(recorder_and_logs) -> Non
     )
     record = _records(dispatcher, exporter)[0]
     assert "cat /etc/shadow" in record.attributes["exception.message"]
+
+
+def test_an_event_kind_this_recorder_does_not_consume_is_ignored(recorder_and_logs) -> None:
+    recorder, exporter, dispatcher = recorder_and_logs
+    assert dispatcher.submit(stamp("api_request", {"session_id": SESSION}))
+    assert _records(dispatcher, exporter) == []
+    assert dispatcher.stats().failed == 0

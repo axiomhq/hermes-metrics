@@ -118,8 +118,9 @@ class TraceRecorder:
             "api_request": self._api_request,
             "api_error": self._api_error,
             "tool_call": self._tool_call,
-        }[event.kind]
-        handler(event)
+        }.get(event.kind)
+        if handler is not None:
+            handler(event)
 
     def _common(self, payload: Mapping[str, Any], step: str) -> dict[str, Any]:
         platform = payload.get("platform")

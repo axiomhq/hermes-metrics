@@ -22,3 +22,7 @@ class Event:
 
 def stamp(kind: str, payload: Mapping[str, Any]) -> Event:
     return Event(kind, payload, time.time())
+
+
+# Recorders share one queue, so each sees every kind any of them submits and
+# consumes only the kinds it knows.
