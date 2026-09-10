@@ -31,6 +31,7 @@ from .inventory import ToolInventory
 from .logs import LogRecorder
 from .metrics import MetricRecorder
 from .pricing import PriceRecorder
+from .skills import SkillInventory
 from .traces import TraceRecorder
 from .transport import Transport
 from .transport import build as build_transport
@@ -98,6 +99,7 @@ class Runtime:
             recorders.append(MetricRecorder(meter))
             recorders.append(PriceRecorder(meter))
             recorders.append(ToolInventory(meter))
+            recorders.append(SkillInventory(meter))
             HealthMetrics(meter, dispatcher)
 
         if SIGNAL_LOGS in transport.exporters:
