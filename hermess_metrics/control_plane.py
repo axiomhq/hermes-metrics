@@ -16,8 +16,8 @@ DEFAULT_BACKOFF = 0.5
 MAX_ATTEMPTS = 3
 RETRY_STATUS = frozenset({408, 429, 500, 502, 503, 504})
 
-PERMISSION_DATASETS = "datasets: create"
-PERMISSION_TOKENS = "apiTokens: create"
+PERMISSION_DATASETS = "datasets:create"
+PERMISSION_TOKENS = "apiTokens:create"
 
 DATASET_KINDS = {
     "traces": "otel:traces:v1",

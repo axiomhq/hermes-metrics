@@ -28,8 +28,9 @@ QUESTION = """Where should Hermes send its telemetry?
 
   1) Provision a new Axiom org now. Free, ready in seconds, and deleted
      within a day unless you follow the claim link to keep it.
-  2) Use an Axiom org you already have. You will need an API token that
-     can create datasets.
+  2) Use an Axiom org you already have. The token needs two permissions,
+     datasets:create and apiTokens:create, because setup creates the three
+     datasets and then mints a narrow token scoped to them.
 
 Choose 1 or 2: """
 ORG_QUESTION = "Axiom org id (find it in the console URL; press enter if the token is org-scoped): "
@@ -44,7 +45,11 @@ def hermes_home() -> Path:
 def build_parser(parser: argparse.ArgumentParser) -> None:
     actions = parser.add_subparsers(dest="axiom_action", required=True)
     setup = actions.add_parser("setup", help="Create datasets and a token, then save them")
-    setup.add_argument("--token", help="API token for an org you already have")
+    setup.add_argument(
+        "--token",
+        help=f"API token for an org you already have; needs {PERMISSION_DATASETS} "
+        f"and {PERMISSION_TOKENS}",
+    )
     setup.add_argument("--org", default="", help="Org id, if your token is not org-scoped")
     setup.add_argument("--provision", action="store_true", help="Provision a new temporary org")
     setup.add_argument("--prefix", default=DEFAULT_PREFIX, help="Dataset name prefix")

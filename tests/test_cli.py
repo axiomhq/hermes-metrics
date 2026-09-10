@@ -387,8 +387,8 @@ def test_a_denied_setup_names_the_call_and_the_permissions(
     assert code == 1
     joined = "\n".join(out.lines)
     assert "creating dataset 'hermes-traces' was refused (403)" in joined
-    assert "datasets: create" in joined
-    assert "apiTokens: create" in joined
+    assert cli.PERMISSION_DATASETS in joined
+    assert cli.PERMISSION_TOKENS in joined
     assert "--org <org-id>" in joined
     assert "settings/api-tokens" in joined
 
@@ -413,3 +413,24 @@ def test_a_detailed_denial_message_is_passed_through(denied_server, tmp_path, mo
     cli.run_setup(_args(denied_server, tmp_path / ".env", token="xaat-mine"), ask=_never, out=out)
     assert any("token does not have access" in line for line in out.lines)
     _DeniedHandler.body = b'{"message":"forbidden"}'
+
+
+def test_the_question_names_both_permissions_setup_needs() -> None:
+    """The token mints a scoped token as well as creating datasets."""
+    assert cli.PERMISSION_DATASETS in cli.QUESTION
+    assert cli.PERMISSION_TOKENS in cli.QUESTION
+
+
+def test_the_token_flag_help_names_both_permissions() -> None:
+    parser = argparse.ArgumentParser()
+    cli.build_parser(parser)
+    help_text = parser.format_help()
+    subparser_help = [
+        action.choices["setup"].format_help()
+        for action in parser._actions
+        if hasattr(action, "choices") and action.choices and "setup" in action.choices
+    ][0]
+    flat = " ".join(subparser_help.split())
+    assert cli.PERMISSION_DATASETS in flat
+    assert cli.PERMISSION_TOKENS in flat
+    assert help_text
