@@ -29,6 +29,7 @@ from .events import (
 from .health import HealthMetrics
 from .logs import LogRecorder
 from .metrics import MetricRecorder
+from .pricing import PriceRecorder
 from .traces import TraceRecorder
 from .transport import Transport
 from .transport import build as build_transport
@@ -94,6 +95,7 @@ class Runtime:
             providers.append(provider_m)
             meter = provider_m.get_meter(__package__)
             recorders.append(MetricRecorder(meter))
+            recorders.append(PriceRecorder(meter))
             HealthMetrics(meter, dispatcher)
 
         if SIGNAL_LOGS in transport.exporters:
