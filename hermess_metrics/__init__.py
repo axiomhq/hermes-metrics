@@ -31,8 +31,11 @@ def register(
     config = Config.from_env(env)
 
     if not config.active:
+        from .cli import register_cli
+
+        register_cli(ctx)
         logger.warning(
-            "hermess-metrics is enabled but idle: %s",
+            "hermess-metrics is enabled but idle: %s; run `hermes axiom setup`",
             "; ".join(config.problems()),
         )
         return config
@@ -41,6 +44,10 @@ def register(
     if hint is not None:
         logger.warning("hermess-metrics is enabled but idle: %s", hint)
         return config
+
+    from .cli import register_cli
+
+    register_cli(ctx)
 
     try:
         runtime = runtime_factory(config)

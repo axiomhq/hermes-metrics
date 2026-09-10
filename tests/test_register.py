@@ -45,12 +45,12 @@ def test_register_is_exported_at_package_level() -> None:
     assert callable(hermess_metrics.register)
 
 
-def test_register_on_inactive_config_registers_nothing() -> None:
+def test_register_on_inactive_config_observes_nothing() -> None:
+    """Setup stays reachable while idle; that is how the operator fixes it."""
     ctx = FakeCtx()
     hermess_metrics.register(ctx, env={})
     assert ctx.hooks == []
     assert ctx.tools == []
-    assert ctx.cli_commands == []
     assert ctx.middleware == []
 
 
@@ -65,6 +65,7 @@ def test_register_survives_a_runtime_that_cannot_start() -> None:
     config = hermess_metrics.register(ctx, env=FULL_ENV, runtime_factory=_explode)
     assert config.active
     assert ctx.hooks == []
+    assert ctx.cli_commands == ["axiom"]
 
 
 def _explode(config: Config) -> Any:
@@ -114,3 +115,15 @@ def test_register_stays_idle_when_the_otlp_extra_is_absent(monkeypatch: Any) -> 
     config = hermess_metrics.register(ctx, env=FULL_ENV, runtime_factory=_FakeRuntime)
     assert config.active
     assert ctx.hooks == []
+
+
+def test_the_setup_command_is_available_even_when_idle() -> None:
+    ctx = FakeCtx()
+    hermess_metrics.register(ctx, env={})
+    assert ctx.cli_commands == ["axiom"]
+
+
+def test_the_setup_command_is_available_when_configured() -> None:
+    ctx = FakeCtx()
+    hermess_metrics.register(ctx, env=FULL_ENV, runtime_factory=_FakeRuntime)
+    assert ctx.cli_commands == ["axiom"]
