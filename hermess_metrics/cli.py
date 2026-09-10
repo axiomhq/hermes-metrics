@@ -104,11 +104,12 @@ def run_setup(
         out(f"Setup cancelled: {exc}")
         return 2
 
-    plane = ControlPlane(domain=args.domain)
+    plane = ControlPlane(domain=args.domain, token=org_token or "", org=org)
     try:
         result = provision(plane, prefix=args.prefix, region=args.region, org_token=org_token)
     except AxiomError as exc:
-        for line in _explain(exc, org_token, org):
+        read_status = plane.check_read_access() if exc.status in (401, 403) else 0
+        for line in _explain(exc, org_token, org, read_status):
             out(line)
         return 1
 
@@ -121,30 +122,37 @@ def run_setup(
 TOKEN_SETTINGS_URL = "https://app.axiom.co/settings/api-tokens"
 
 
-def _explain_denied(exc: AxiomError, org: str) -> list[str]:
-    """Say which call was refused, what it needed, and the two usual causes."""
+def _explain_denied(exc: AxiomError, org: str, read_status: int) -> list[str]:
+    """Report what was refused and what a plain read did, without guessing why."""
     lines = [f"Setup failed: {exc.operation or 'the request'} was refused ({exc.status})."]
     if exc.message and exc.message != "forbidden":
         lines.append(f"  Axiom said: {exc.message}")
+    if exc.trace_id:
+        lines.append(f"  Axiom trace id: {exc.trace_id}")
     lines.append("")
-    lines.append("Setting up needs a token with both of these permissions:")
-    lines.append(f"  {PERMISSION_DATASETS}")
-    lines.append(f"  {PERMISSION_TOKENS}")
-    lines.append("")
-    lines.append("Two things cause this:")
-    lines.append(f"  1. The token lacks them. Create one at {TOKEN_SETTINGS_URL}")
+    if read_status == 200:
+        lines.append("Reading datasets with the same token worked, so the token is accepted")
+        lines.append("and this specific permission is missing. Setup needs both of:")
+        lines.append(f"  {PERMISSION_DATASETS}")
+        lines.append(f"  {PERMISSION_TOKENS}")
+        lines.append(f"Edit the token at {TOKEN_SETTINGS_URL}")
+        return lines
+    lines.append(f"Reading datasets with the same token was also refused ({read_status}),")
+    lines.append("so this is not one missing permission. The token is not being accepted")
+    lines.append("for this org at all. Check that it is not revoked, and that it belongs")
     if org:
-        lines.append(f"  2. The token does not belong to org {org!r}.")
+        lines.append(f"to org {org!r}.")
     else:
-        lines.append("  2. The token is not org-scoped and no org was given. Retry with:")
-        lines.append("       hermes axiom setup --token <token> --org <org-id>")
+        lines.append("to the org you meant. Pass it with --org <org-id> if it is not scoped.")
     return lines
 
 
-def _explain(exc: AxiomError, org_token: str | None, org: str = "") -> list[str]:
+def _explain(
+    exc: AxiomError, org_token: str | None, org: str = "", read_status: int = 0
+) -> list[str]:
     """Turn an API failure into something the operator can act on."""
     if exc.status in (401, 403):
-        return _explain_denied(exc, org)
+        return _explain_denied(exc, org, read_status)
     if exc.status != 429 or org_token:
         return [f"Setup failed: {exc}"]
     lines = ["Setup failed: Axiom is rate limiting new orgs from this address."]

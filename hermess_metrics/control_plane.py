@@ -38,6 +38,7 @@ class AxiomError(RuntimeError):
         resets_at: int | None = None,
         operation: str = "",
         permission: str = "",
+        trace_id: str = "",
     ) -> None:
         where = f"{operation} failed: " if operation else ""
         super().__init__(f"{where}axiom returned {status}: {message}")
@@ -46,6 +47,7 @@ class AxiomError(RuntimeError):
         self.resets_at = resets_at
         self.operation = operation
         self.permission = permission
+        self.trace_id = trace_id
 
     @property
     def seconds_until_reset(self) -> float:
@@ -130,6 +132,14 @@ class ControlPlane:
             raise AxiomError(200, "token response carried no token")
         return token
 
+    def check_read_access(self) -> int:
+        """Status of a plain read, to tell a missing permission from a bad token."""
+        try:
+            self._request("GET", "/v2/datasets", None, operation="listing datasets")
+        except AxiomError as exc:
+            return exc.status
+        return 200
+
     def _post(
         self,
         path: str,
@@ -157,15 +167,30 @@ class ControlPlane:
                 time.sleep(self.backoff * (2**attempt))
         raise last if last is not None else AxiomError(0, "no attempt was made")
 
-    def _once(
+    def _request(
         self,
-        url: str,
-        data: bytes,
-        headers: dict[str, str],
+        method: str,
+        path: str,
+        data: bytes | None,
         operation: str = "",
         permission: str = "",
     ) -> Any:
-        request = urllib.request.Request(url, data=data, headers=headers, method="POST")
+        url = f"{self.scheme}://{self.domain}{path}"
+        headers = {"Content-Type": "application/json", "Authorization": f"Bearer {self.token}"}
+        if self.org:
+            headers["X-Axiom-Org-Id"] = self.org
+        return self._once(url, data, headers, operation, permission, method)
+
+    def _once(
+        self,
+        url: str,
+        data: bytes | None,
+        headers: dict[str, str],
+        operation: str = "",
+        permission: str = "",
+        method: str = "POST",
+    ) -> Any:
+        request = urllib.request.Request(url, data=data, headers=headers, method=method)
         try:
             with urllib.request.urlopen(request, timeout=self.timeout) as response:
                 raw = response.read().decode() or "{}"
@@ -176,6 +201,7 @@ class ControlPlane:
                 _resets_at(exc.headers),
                 operation,
                 permission,
+                _trace_id(exc.headers),
             ) from exc
         except OSError as exc:
             raise AxiomError(0, str(exc), None, operation, permission) from exc
@@ -183,6 +209,13 @@ class ControlPlane:
             return json.loads(raw)
         except ValueError as exc:
             raise AxiomError(200, "response was not json", None, operation, permission) from exc
+
+
+def _trace_id(headers: Any) -> str:
+    try:
+        return str(headers.get("x-axiom-trace-id") or "")
+    except (AttributeError, TypeError):
+        return ""
 
 
 def _resets_at(headers: Any) -> int | None:

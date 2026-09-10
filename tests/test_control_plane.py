@@ -301,3 +301,31 @@ def test_no_org_header_is_sent_when_absent(server) -> None:
     handler.script["/v2/datasets"] = (200, {"name": "x"})
     _plane(host, token="t").create_dataset("x", DATASET_KINDS["logs"])
     assert "x-axiom-org-id" not in handler.seen[0]["headers"]
+
+
+def test_a_working_read_reports_two_hundred(server) -> None:
+    class _ReadHandler(BaseHTTPRequestHandler):
+        def do_GET(self) -> None:  # noqa: N802
+            self.send_response(200)
+            self.send_header("Content-Length", "2")
+            self.end_headers()
+            self.wfile.write(b"[]")
+
+        def log_message(self, *a: Any) -> None:
+            return
+
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), _ReadHandler)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    try:
+        plane = ControlPlane(
+            domain=f"127.0.0.1:{httpd.server_port}", token="t", scheme="http", backoff=0.0
+        )
+        assert plane.check_read_access() == 200
+    finally:
+        httpd.shutdown()
+
+
+def test_an_unreadable_trace_header_is_ignored() -> None:
+    from hermess_metrics.control_plane import _trace_id
+
+    assert _trace_id(None) == ""

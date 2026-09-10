@@ -356,12 +356,20 @@ def test_the_org_flag_skips_the_org_question(server, tmp_path, monkeypatch) -> N
 
 class _DeniedHandler(BaseHTTPRequestHandler):
     body: bytes = b'{"message":"forbidden"}'
+    read_status: int = 403
 
     def do_POST(self) -> None:  # noqa: N802
-        self.send_response(403)
-        self.send_header("Content-Length", str(len(type(self).body)))
+        self._send(403, type(self).body)
+
+    def do_GET(self) -> None:  # noqa: N802
+        self._send(type(self).read_status, b"[]")
+
+    def _send(self, status: int, body: bytes) -> None:
+        self.send_response(status)
+        self.send_header("x-axiom-trace-id", "trace-abc123")
+        self.send_header("Content-Length", str(len(body)))
         self.end_headers()
-        self.wfile.write(type(self).body)
+        self.wfile.write(body)
 
     def log_message(self, *args: Any) -> None:
         return
@@ -369,50 +377,73 @@ class _DeniedHandler(BaseHTTPRequestHandler):
 
 @pytest.fixture
 def denied_server():
+    _DeniedHandler.body = b'{"message":"forbidden"}'
+    _DeniedHandler.read_status = 403
     httpd = ThreadingHTTPServer(("127.0.0.1", 0), _DeniedHandler)
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
-    yield f"127.0.0.1:{httpd.server_port}"
+    yield f"127.0.0.1:{httpd.server_port}", _DeniedHandler
     httpd.shutdown()
 
 
-def test_a_denied_setup_names_the_call_and_the_permissions(
+def _deny(host: str, tmp_path: Path, out: Any, **overrides: Any) -> int:
+    return cli.run_setup(
+        _args(host, tmp_path / ".env", token="xaat-mine", **overrides), ask=_never, out=out
+    )
+
+
+def test_a_readable_token_missing_create_names_the_permissions(
     denied_server, tmp_path, monkeypatch
 ) -> None:
-    _DeniedHandler.body = b'{"message":"forbidden"}'
+    host, handler = denied_server
+    handler.read_status = 200
     _plain_http(monkeypatch)
     out = _Recorder()
-    code = cli.run_setup(
-        _args(denied_server, tmp_path / ".env", token="xaat-mine"), ask=_never, out=out
-    )
-    assert code == 1
+    assert _deny(host, tmp_path, out) == 1
     joined = "\n".join(out.lines)
     assert "creating dataset 'hermes-traces' was refused (403)" in joined
+    assert "Reading datasets with the same token worked" in joined
     assert cli.PERMISSION_DATASETS in joined
     assert cli.PERMISSION_TOKENS in joined
-    assert "--org <org-id>" in joined
     assert "settings/api-tokens" in joined
 
 
-def test_a_denied_setup_with_an_org_blames_that_org(denied_server, tmp_path, monkeypatch) -> None:
+def test_a_token_refused_everywhere_says_so_instead_of_blaming_a_permission(
+    denied_server, tmp_path, monkeypatch
+) -> None:
+    host, handler = denied_server
+    handler.read_status = 403
     _plain_http(monkeypatch)
     out = _Recorder()
-    cli.run_setup(
-        _args(denied_server, tmp_path / ".env", token="xaat-mine", org="my-org-7"),
-        ask=_never,
-        out=out,
-    )
+    assert _deny(host, tmp_path, out) == 1
     joined = "\n".join(out.lines)
-    assert "'my-org-7'" in joined
-    assert "--org <org-id>" not in joined
+    assert "was also refused (403)" in joined
+    assert "not one missing permission" in joined
+    assert cli.PERMISSION_DATASETS not in joined
+
+
+def test_the_axiom_trace_id_is_reported(denied_server, tmp_path, monkeypatch) -> None:
+    host, _ = denied_server
+    _plain_http(monkeypatch)
+    out = _Recorder()
+    _deny(host, tmp_path, out)
+    assert any("trace-abc123" in line for line in out.lines)
+
+
+def test_a_denial_with_an_org_names_that_org(denied_server, tmp_path, monkeypatch) -> None:
+    host, _ = denied_server
+    _plain_http(monkeypatch)
+    out = _Recorder()
+    _deny(host, tmp_path, out, org="my-org-7")
+    assert any("'my-org-7'" in line for line in out.lines)
 
 
 def test_a_detailed_denial_message_is_passed_through(denied_server, tmp_path, monkeypatch) -> None:
-    _DeniedHandler.body = b'{"message":"token does not have access to resource: datasets"}'
+    host, handler = denied_server
+    handler.body = b'{"message":"token does not have access to resource: datasets"}'
     _plain_http(monkeypatch)
     out = _Recorder()
-    cli.run_setup(_args(denied_server, tmp_path / ".env", token="xaat-mine"), ask=_never, out=out)
+    _deny(host, tmp_path, out)
     assert any("token does not have access" in line for line in out.lines)
-    _DeniedHandler.body = b'{"message":"forbidden"}'
 
 
 def test_the_question_names_both_permissions_setup_needs() -> None:
@@ -424,7 +455,6 @@ def test_the_question_names_both_permissions_setup_needs() -> None:
 def test_the_token_flag_help_names_both_permissions() -> None:
     parser = argparse.ArgumentParser()
     cli.build_parser(parser)
-    help_text = parser.format_help()
     subparser_help = [
         action.choices["setup"].format_help()
         for action in parser._actions
@@ -433,4 +463,3 @@ def test_the_token_flag_help_names_both_permissions() -> None:
     flat = " ".join(subparser_help.split())
     assert cli.PERMISSION_DATASETS in flat
     assert cli.PERMISSION_TOKENS in flat
-    assert help_text
