@@ -194,3 +194,13 @@ def test_start_builds_real_exporters_from_config() -> None:
         assert len(runtime.providers) == 3
     finally:
         runtime.shutdown(2.0)
+
+
+def test_plugin_health_is_published_alongside_the_metrics(runtime_and_sinks) -> None:
+    runtime, _, _ = runtime_and_sinks
+    ctx = FakeCtx()
+    runtime.register_hooks(ctx)
+    ctx.hooks["post_api_request"](**_api_payload())
+    assert runtime.flush(5.0)
+    assert runtime.dispatcher.stats().accepted == 1
+    assert runtime.dispatcher.depth == 0

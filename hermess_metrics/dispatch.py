@@ -59,6 +59,11 @@ class Dispatcher(Generic[T]):
         self._worker: threading.Thread | None = None
 
     @property
+    def depth(self) -> int:
+        """Items waiting, not counting one already in the handler."""
+        return self._queue.qsize()
+
+    @property
     def worker_is_daemon(self) -> bool:
         worker = self._worker
         return bool(worker and worker.daemon)

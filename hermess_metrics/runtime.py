@@ -26,6 +26,7 @@ from .events import (
     KIND_TURN_START,
     stamp,
 )
+from .health import HealthMetrics
 from .logs import LogRecorder
 from .metrics import MetricRecorder
 from .traces import TraceRecorder
@@ -91,7 +92,9 @@ class Runtime:
             reader = PeriodicExportingMetricReader(transport.exporters[SIGNAL_METRICS])
             provider_m = MeterProvider(resource=transport.resource, metric_readers=[reader])
             providers.append(provider_m)
-            recorders.append(MetricRecorder(provider_m.get_meter(__package__)))
+            meter = provider_m.get_meter(__package__)
+            recorders.append(MetricRecorder(meter))
+            HealthMetrics(meter, dispatcher)
 
         if SIGNAL_LOGS in transport.exporters:
             provider_l = LoggerProvider(resource=transport.resource)
