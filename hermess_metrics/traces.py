@@ -13,7 +13,6 @@ import logging
 import time
 from collections import OrderedDict
 from collections.abc import Mapping
-from dataclasses import dataclass
 from typing import Any
 
 from opentelemetry import trace as trace_api
@@ -21,6 +20,7 @@ from opentelemetry.context import Context
 from opentelemetry.trace import Span, SpanKind, Status, StatusCode
 
 from .dispatch import Dispatcher
+from .events import Event, stamp
 from .redaction import CLASS_MESSAGES, CLASS_TOOL_IO, Redactor
 
 SCHEMA_URL = "https://axiom.co/ai/schemas/0.0.2"
@@ -37,15 +37,6 @@ _USAGE_ATTRIBUTES = (
 )
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass(frozen=True)
-class _Event:
-    kind: str
-    payload: Mapping[str, Any]
-    # Stamped on the agent thread, so a queue backlog cannot delay the start of
-    # a structural span past the children it must contain.
-    observed_at: float
 
 
 def _model_label(payload: Mapping[str, Any]) -> str:
@@ -113,10 +104,10 @@ class TraceRecorder:
         self._submit("tool_call", payload)
 
     def _submit(self, kind: str, payload: Mapping[str, Any]) -> None:
-        self._dispatcher.submit(_Event(kind, payload, time.time()))
+        self._dispatcher.submit(stamp(kind, payload))
 
     def handle(self, event: Any) -> None:
-        if not isinstance(event, _Event):
+        if not isinstance(event, Event):
             return
         handler = {
             "session_start": self._session_start,
@@ -149,7 +140,7 @@ class TraceRecorder:
     def _parent_context(self, span: Span | None) -> Context:
         return trace_api.set_span_in_context(span) if span is not None else Context()
 
-    def _session_start(self, event: _Event) -> None:
+    def _session_start(self, event: Event) -> None:
         payload = event.payload
         session_id = str(payload.get("session_id") or "")
         span = self._tracer.start_span(
@@ -166,7 +157,7 @@ class TraceRecorder:
         )
         self._remember(self._sessions, session_id, span)
 
-    def _session_end(self, event: _Event) -> None:
+    def _session_end(self, event: Event) -> None:
         payload = event.payload
         span = self._sessions.pop(str(payload.get("session_id") or ""), None)
         if span is None:
@@ -175,7 +166,7 @@ class TraceRecorder:
             span.set_attribute("hermes.interrupted", True)
         span.end(end_time=_nanos(event.observed_at))
 
-    def _turn_start(self, event: _Event) -> None:
+    def _turn_start(self, event: Event) -> None:
         payload = event.payload
         turn_id = str(payload.get("turn_id") or "")
         parent = self._sessions.get(str(payload.get("session_id") or ""))
@@ -192,7 +183,7 @@ class TraceRecorder:
         )
         self._remember(self._turns, turn_id, span)
 
-    def _turn_end(self, event: _Event) -> None:
+    def _turn_end(self, event: Event) -> None:
         payload = event.payload
         span = self._turns.pop(str(payload.get("turn_id") or ""), None)
         if span is not None:
@@ -226,7 +217,7 @@ class TraceRecorder:
             start_time=_nanos(started_at) if isinstance(started_at, (int, float)) else None,
         )
 
-    def _api_request(self, event: _Event) -> None:
+    def _api_request(self, event: Event) -> None:
         payload = event.payload
         span = self._start_chat_span(payload)
         finish_reason = payload.get("finish_reason")
@@ -244,7 +235,7 @@ class TraceRecorder:
         ended_at = payload.get("ended_at")
         span.end(end_time=_nanos(ended_at) if isinstance(ended_at, (int, float)) else None)
 
-    def _api_error(self, event: _Event) -> None:
+    def _api_error(self, event: Event) -> None:
         payload = event.payload
         span = self._start_chat_span(payload)
         reason = payload.get("reason")
@@ -261,7 +252,7 @@ class TraceRecorder:
         ended_at = payload.get("ended_at")
         span.end(end_time=_nanos(ended_at) if isinstance(ended_at, (int, float)) else None)
 
-    def _tool_call(self, event: _Event) -> None:
+    def _tool_call(self, event: Event) -> None:
         payload = event.payload
         tool_name = str(payload.get("tool_name") or "")
         duration_ms = payload.get("duration_ms")
