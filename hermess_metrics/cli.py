@@ -173,6 +173,10 @@ def _report(result: Provisioned, target: Path, out: Callable[[str], None]) -> No
     for signal, dataset in result.datasets.items():
         out(f"  {signal:<8} {dataset}")
     out(f"  settings {target}")
+    if not result.can_query:
+        out("")
+        out("The saved token can write telemetry but not read it back, because the")
+        out("token you supplied cannot grant query access on these datasets.")
     if result.needs_claim:
         out("")
         out("Claim the org to keep this data and let alerts fire:")

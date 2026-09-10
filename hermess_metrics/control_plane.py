@@ -115,14 +115,17 @@ class ControlPlane:
         )
         return result if isinstance(result, dict) else {}
 
-    def create_ingest_token(self, name: str, datasets: list[str], description: str = "") -> str:
-        """Mint a token that writes and reads these datasets, and nothing else."""
+    def create_ingest_token(
+        self, name: str, datasets: list[str], description: str = "", with_query: bool = True
+    ) -> str:
+        """Mint a token scoped to these datasets, and nothing else."""
+        capability: dict[str, list[str]] = {"ingest": ["create"]}
+        if with_query:
+            capability["query"] = ["read"]
         payload = {
             "name": name,
             "description": description,
-            "datasetCapabilities": {
-                dataset: {"ingest": ["create"], "query": ["read"]} for dataset in datasets
-            },
+            "datasetCapabilities": {dataset: dict(capability) for dataset in datasets},
         }
         body = self._post(
             "/v2/tokens",

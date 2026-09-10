@@ -472,3 +472,16 @@ def test_the_token_flag_help_names_both_permissions() -> None:
     flat = " ".join(subparser_help.split())
     assert cli.PERMISSION_DATASETS in flat
     assert cli.PERMISSION_TOKENS in flat
+
+
+def test_an_ingest_only_token_is_called_out(server, tmp_path, monkeypatch) -> None:
+    from hermess_metrics import provision as provision_module
+
+    host, _ = server
+    _plain_http(monkeypatch)
+    monkeypatch.setattr(
+        provision_module, "_mint", lambda admin, datasets: ("xaat-ingest-only", False)
+    )
+    out = _Recorder()
+    assert cli.run_setup(_args(host, tmp_path / ".env", provision=True), ask=_never, out=out) == 0
+    assert any("cannot grant query access" in line for line in out.lines)

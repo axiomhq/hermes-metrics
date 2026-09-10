@@ -16,7 +16,7 @@ from .config import (
     ENV_TOKEN,
     ENV_TRACES_DATASET,
 )
-from .control_plane import DATASET_KINDS, ControlPlane
+from .control_plane import DATASET_KINDS, AxiomError, ControlPlane
 
 DEFAULT_PREFIX = "hermes"
 TOKEN_NAME = "hermess-metrics ingest"
@@ -36,6 +36,7 @@ class Provisioned:
     org_id: str = ""
     expires_at: str = ""
     claim_url: str = field(default="", repr=False)
+    can_query: bool = True
 
     @property
     def needs_claim(self) -> bool:
@@ -63,7 +64,7 @@ def provision(
     datasets = {signal: f"{prefix}-{signal}" for signal in DATASET_KINDS}
     for signal, name in datasets.items():
         admin.create_dataset(name, DATASET_KINDS[signal], DESCRIPTION)
-    token = admin.create_ingest_token(TOKEN_NAME, list(datasets.values()), DESCRIPTION)
+    token, can_query = _mint(admin, list(datasets.values()))
     return Provisioned(
         domain=plane.domain,
         region=provisioned_org.region if provisioned_org else "",
@@ -72,7 +73,19 @@ def provision(
         org_id=provisioned_org.id if provisioned_org else org,
         expires_at=provisioned_org.expires_at if provisioned_org else "",
         claim_url=provisioned_org.claim_url if provisioned_org else "",
+        can_query=can_query,
     )
+
+
+def _mint(admin: ControlPlane, datasets: list[str]) -> tuple[str, bool]:
+    """Ask for read as well as write, and settle for write when refused."""
+    try:
+        return admin.create_ingest_token(TOKEN_NAME, datasets, DESCRIPTION), True
+    except AxiomError as exc:
+        if exc.status not in (400, 403):
+            raise
+        logger.info("query capability refused, minting an ingest-only token: %s", exc.message)
+    return admin.create_ingest_token(TOKEN_NAME, datasets, DESCRIPTION, with_query=False), False
 
 
 def env_values(provisioned: Provisioned) -> dict[str, str]:

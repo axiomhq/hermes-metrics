@@ -230,3 +230,68 @@ def test_an_adopted_org_writes_no_claim_settings(server) -> None:
     assert "HERMES_AXIOM_ORG" not in values
     assert "HERMES_AXIOM_EXPIRES_AT" not in values
     assert values["HERMES_AXIOM_TRACES_DATASET"] == "mine-traces"
+
+
+class _NoQueryHandler(BaseHTTPRequestHandler):
+    """Refuses query capability the way Axiom does when the grantor lacks it."""
+
+    seen: list[dict[str, Any]] = []
+
+    def do_POST(self) -> None:  # noqa: N802
+        length = int(self.headers.get("Content-Length") or 0)
+        body = json.loads(self.rfile.read(length).decode()) if length else {}
+        type(self).seen.append({"path": self.path, "body": body})
+        if self.path == "/v2/datasets":
+            payload, status = {"name": body["name"]}, 200
+        elif any("query" in cap for cap in body.get("datasetCapabilities", {}).values()):
+            payload, status = {"message": "You do not have read permission for query"}, 400
+        else:
+            payload, status = {"token": "xaat-ingest-only"}, 200
+        encoded = json.dumps(payload).encode()
+        self.send_response(status)
+        self.send_header("Content-Length", str(len(encoded)))
+        self.end_headers()
+        self.wfile.write(encoded)
+
+    def log_message(self, *args: Any) -> None:
+        return
+
+
+@pytest.fixture
+def no_query_server():
+    _NoQueryHandler.seen = []
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), _NoQueryHandler)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    yield f"127.0.0.1:{httpd.server_port}", _NoQueryHandler
+    httpd.shutdown()
+
+
+def test_a_refused_query_capability_falls_back_to_ingest_only(no_query_server) -> None:
+    host, handler = no_query_server
+    plane = ControlPlane(domain=host, scheme="http", backoff=0.0)
+    result = provision(plane, prefix="hermes", org_token="xaat-mine")
+    assert result.token == "xaat-ingest-only"
+    assert result.can_query is False
+    token_calls = [r for r in handler.seen if r["path"] == "/v2/tokens"]
+    assert len(token_calls) == 2
+    assert "query" in str(token_calls[0]["body"])
+    assert "query" not in str(token_calls[1]["body"])
+
+
+def test_a_granted_query_capability_is_kept(server) -> None:
+    host, _ = server
+    assert _run(host).can_query is True
+
+
+def test_a_non_permission_error_while_minting_is_not_retried(server, monkeypatch) -> None:
+    from hermess_metrics.control_plane import AxiomError
+
+    host, handler = server
+    plane = ControlPlane(domain=host, scheme="http", backoff=0.0)
+
+    def explode(self: Any, *args: Any, **kwargs: Any) -> Any:
+        raise AxiomError(500, "server on fire")
+
+    monkeypatch.setattr(ControlPlane, "create_ingest_token", explode)
+    with pytest.raises(AxiomError):
+        provision(plane, prefix="hermes", org_token="xaat-mine")
