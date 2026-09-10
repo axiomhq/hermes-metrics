@@ -16,6 +16,9 @@ DEFAULT_BACKOFF = 0.5
 MAX_ATTEMPTS = 3
 RETRY_STATUS = frozenset({408, 429, 500, 502, 503, 504})
 
+# Each needs a different permission, so one succeeding proves the token itself is fine.
+PROBE_PATHS = ("/v2/tokens", "/v2/datasets", "/v2/dashboards")
+
 PERMISSION_DATASETS = "datasets:create"
 PERMISSION_TOKENS = "apiTokens:create"
 
@@ -132,13 +135,20 @@ class ControlPlane:
             raise AxiomError(200, "token response carried no token")
         return token
 
-    def check_read_access(self) -> int:
-        """Status of a plain read, to tell a missing permission from a bad token."""
-        try:
-            self._request("GET", "/v2/datasets", None, operation="listing datasets")
-        except AxiomError as exc:
-            return exc.status
-        return 200
+    def token_is_accepted(self) -> bool | None:
+        """True if any read succeeded, False if all were refused, None if unreachable."""
+        refused = False
+        for path in PROBE_PATHS:
+            try:
+                self._request("GET", path, None, operation="probing access")
+            except AxiomError as exc:
+                if exc.status in (401, 403):
+                    refused = True
+                    continue
+                return None
+            else:
+                return True
+        return False if refused else None
 
     def _post(
         self,

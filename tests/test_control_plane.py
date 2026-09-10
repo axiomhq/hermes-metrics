@@ -30,6 +30,9 @@ class _Handler(BaseHTTPRequestHandler):
     script: dict[str, tuple[int, Any]] = {}
     seen: list[dict[str, Any]] = []
 
+    def do_GET(self) -> None:  # noqa: N802
+        self.do_POST()
+
     def do_POST(self) -> None:  # noqa: N802
         length = int(self.headers.get("Content-Length") or 0)
         body = self.rfile.read(length).decode() if length else ""
@@ -303,7 +306,7 @@ def test_no_org_header_is_sent_when_absent(server) -> None:
     assert "x-axiom-org-id" not in handler.seen[0]["headers"]
 
 
-def test_a_working_read_reports_two_hundred(server) -> None:
+def test_a_token_accepted_by_any_read_is_reported_as_accepted(server) -> None:
     class _ReadHandler(BaseHTTPRequestHandler):
         def do_GET(self) -> None:  # noqa: N802
             self.send_response(200)
@@ -320,7 +323,7 @@ def test_a_working_read_reports_two_hundred(server) -> None:
         plane = ControlPlane(
             domain=f"127.0.0.1:{httpd.server_port}", token="t", scheme="http", backoff=0.0
         )
-        assert plane.check_read_access() == 200
+        assert plane.token_is_accepted() is True
     finally:
         httpd.shutdown()
 
@@ -329,3 +332,16 @@ def test_an_unreadable_trace_header_is_ignored() -> None:
     from hermess_metrics.control_plane import _trace_id
 
     assert _trace_id(None) == ""
+
+
+def test_a_token_refused_by_every_read_is_reported_as_refused(server) -> None:
+    host, handler = server
+    for path in ("/v2/tokens", "/v2/datasets", "/v2/dashboards"):
+        handler.script[path] = (403, {"message": "forbidden"})
+    plane = ControlPlane(domain=host, token="t", scheme="http", backoff=0.0)
+    assert plane.token_is_accepted() is False
+
+
+def test_an_unreachable_host_gives_no_verdict() -> None:
+    plane = ControlPlane(domain="127.0.0.1:1", token="t", scheme="http", backoff=0.0)
+    assert plane.token_is_accepted() is None

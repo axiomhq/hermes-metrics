@@ -356,13 +356,13 @@ def test_the_org_flag_skips_the_org_question(server, tmp_path, monkeypatch) -> N
 
 class _DeniedHandler(BaseHTTPRequestHandler):
     body: bytes = b'{"message":"forbidden"}'
-    read_status: int = 403
+    read_status: dict[str, int] = {}
 
     def do_POST(self) -> None:  # noqa: N802
         self._send(403, type(self).body)
 
     def do_GET(self) -> None:  # noqa: N802
-        self._send(type(self).read_status, b"[]")
+        self._send(type(self).read_status.get(self.path, 403), b"[]")
 
     def _send(self, status: int, body: bytes) -> None:
         self.send_response(status)
@@ -378,7 +378,7 @@ class _DeniedHandler(BaseHTTPRequestHandler):
 @pytest.fixture
 def denied_server():
     _DeniedHandler.body = b'{"message":"forbidden"}'
-    _DeniedHandler.read_status = 403
+    _DeniedHandler.read_status = {}
     httpd = ThreadingHTTPServer(("127.0.0.1", 0), _DeniedHandler)
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
     yield f"127.0.0.1:{httpd.server_port}", _DeniedHandler
@@ -391,34 +391,43 @@ def _deny(host: str, tmp_path: Path, out: Any, **overrides: Any) -> int:
     )
 
 
-def test_a_readable_token_missing_create_names_the_permissions(
+def test_a_token_accepted_elsewhere_names_the_one_missing_permission(
     denied_server, tmp_path, monkeypatch
 ) -> None:
+    """A token with apiTokens:read but no datasets permission at all."""
     host, handler = denied_server
-    handler.read_status = 200
+    handler.read_status = {"/v2/tokens": 200}
     _plain_http(monkeypatch)
     out = _Recorder()
     assert _deny(host, tmp_path, out) == 1
     joined = "\n".join(out.lines)
     assert "creating dataset 'hermes-traces' was refused (403)" in joined
-    assert "Reading datasets with the same token worked" in joined
-    assert cli.PERMISSION_DATASETS in joined
-    assert cli.PERMISSION_TOKENS in joined
+    assert f"needs the {cli.PERMISSION_DATASETS} permission" in joined
+    assert "the token is accepted" in joined
     assert "settings/api-tokens" in joined
 
 
-def test_a_token_refused_everywhere_says_so_instead_of_blaming_a_permission(
+def test_a_token_refused_everywhere_does_not_pin_one_permission(
     denied_server, tmp_path, monkeypatch
 ) -> None:
     host, handler = denied_server
-    handler.read_status = 403
+    handler.read_status = {}
     _plain_http(monkeypatch)
     out = _Recorder()
     assert _deny(host, tmp_path, out) == 1
     joined = "\n".join(out.lines)
-    assert "was also refused (403)" in joined
-    assert "not one missing permission" in joined
-    assert cli.PERMISSION_DATASETS not in joined
+    assert "Every other read with the same token was refused" in joined
+    assert "missing more than this one permission" in joined
+
+
+def test_the_probe_tries_more_than_datasets(denied_server, tmp_path, monkeypatch) -> None:
+    """Probing only datasets would misread a token that lacks datasets:read."""
+    host, handler = denied_server
+    handler.read_status = {"/v2/dashboards": 200}
+    _plain_http(monkeypatch)
+    out = _Recorder()
+    _deny(host, tmp_path, out)
+    assert any("the token is accepted" in line for line in out.lines)
 
 
 def test_the_axiom_trace_id_is_reported(denied_server, tmp_path, monkeypatch) -> None:
