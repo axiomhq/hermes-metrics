@@ -115,7 +115,10 @@ def test_an_ingest_token_is_scoped_to_the_named_datasets(server) -> None:
     token = _plane(host, token="xaat-admin").create_ingest_token("ingest", ["a", "b"])
     assert token == "xaat-scoped"
     capabilities = handler.seen[0]["body"]["datasetCapabilities"]
-    assert capabilities == {"a": {"ingest": ["create"]}, "b": {"ingest": ["create"]}}
+    assert capabilities == {
+        "a": {"ingest": ["create"], "query": ["read"]},
+        "b": {"ingest": ["create"], "query": ["read"]},
+    }
 
 
 def test_a_client_error_is_raised_with_its_message(server) -> None:

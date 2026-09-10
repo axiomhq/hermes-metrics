@@ -82,10 +82,13 @@ class ControlPlane:
         return result if isinstance(result, dict) else {}
 
     def create_ingest_token(self, name: str, datasets: list[str], description: str = "") -> str:
+        """Mint a token that writes and reads these datasets, and nothing else."""
         payload = {
             "name": name,
             "description": description,
-            "datasetCapabilities": {dataset: {"ingest": ["create"]} for dataset in datasets},
+            "datasetCapabilities": {
+                dataset: {"ingest": ["create"], "query": ["read"]} for dataset in datasets
+            },
         }
         body = self._post("/v2/tokens", payload)
         token = body.get("token") if isinstance(body, dict) else None

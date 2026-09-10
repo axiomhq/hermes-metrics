@@ -191,3 +191,14 @@ def test_the_written_file_round_trips_into_config(server, tmp_path: Path) -> Non
     assert config.active
     assert set(config.configured_signals) == {"traces", "logs", "metrics"}
     assert os.environ.get("HERMES_AXIOM_TOKEN") != config.token or True
+
+
+def test_the_token_can_read_back_what_it_wrote(server) -> None:
+    """A token that cannot query leaves the operator unable to check delivery."""
+    host, handler = server
+    _run(host)
+    capabilities = next(r for r in handler.seen if r["path"] == "/v2/tokens")["body"][
+        "datasetCapabilities"
+    ]
+    for dataset in ("hermes-traces", "hermes-logs", "hermes-metrics"):
+        assert capabilities[dataset] == {"ingest": ["create"], "query": ["read"]}
