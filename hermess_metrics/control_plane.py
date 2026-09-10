@@ -16,6 +16,9 @@ DEFAULT_BACKOFF = 0.5
 MAX_ATTEMPTS = 3
 RETRY_STATUS = frozenset({408, 429, 500, 502, 503, 504})
 
+PERMISSION_DATASETS = "datasets: create"
+PERMISSION_TOKENS = "apiTokens: create"
+
 DATASET_KINDS = {
     "traces": "otel:traces:v1",
     "logs": "otel:logs:v1",
@@ -28,11 +31,21 @@ logger = logging.getLogger(__name__)
 class AxiomError(RuntimeError):
     """A control-plane call that did not succeed."""
 
-    def __init__(self, status: int, message: str, resets_at: int | None = None) -> None:
-        super().__init__(f"axiom returned {status}: {message}")
+    def __init__(
+        self,
+        status: int,
+        message: str,
+        resets_at: int | None = None,
+        operation: str = "",
+        permission: str = "",
+    ) -> None:
+        where = f"{operation} failed: " if operation else ""
+        super().__init__(f"{where}axiom returned {status}: {message}")
         self.status = status
         self.message = message
         self.resets_at = resets_at
+        self.operation = operation
+        self.permission = permission
 
     @property
     def seconds_until_reset(self) -> float:
@@ -69,7 +82,12 @@ class ControlPlane:
             payload["name"] = name
         if region:
             payload["edgeDeployment"] = region
-        body = self._post("/v2/orgs/provision", payload, authenticated=False)
+        body = self._post(
+            "/v2/orgs/provision",
+            payload,
+            authenticated=False,
+            operation="provisioning an org",
+        )
         try:
             return ProvisionedOrg(
                 id=body["id"],
@@ -84,7 +102,12 @@ class ControlPlane:
 
     def create_dataset(self, name: str, kind: str, description: str = "") -> dict[str, Any]:
         payload = {"name": name, "kind": kind, "description": description}
-        result = self._post("/v2/datasets", payload)
+        result = self._post(
+            "/v2/datasets",
+            payload,
+            operation=f"creating dataset {name!r}",
+            permission=PERMISSION_DATASETS,
+        )
         return result if isinstance(result, dict) else {}
 
     def create_ingest_token(self, name: str, datasets: list[str], description: str = "") -> str:
@@ -96,13 +119,25 @@ class ControlPlane:
                 dataset: {"ingest": ["create"], "query": ["read"]} for dataset in datasets
             },
         }
-        body = self._post("/v2/tokens", payload)
+        body = self._post(
+            "/v2/tokens",
+            payload,
+            operation="creating an ingest token",
+            permission=PERMISSION_TOKENS,
+        )
         token = body.get("token") if isinstance(body, dict) else None
         if not isinstance(token, str) or not token:
             raise AxiomError(200, "token response carried no token")
         return token
 
-    def _post(self, path: str, payload: Any, authenticated: bool = True) -> Any:
+    def _post(
+        self,
+        path: str,
+        payload: Any,
+        authenticated: bool = True,
+        operation: str = "",
+        permission: str = "",
+    ) -> Any:
         url = f"{self.scheme}://{self.domain}{path}"
         data = json.dumps(payload).encode()
         headers = {"Content-Type": "application/json"}
@@ -113,7 +148,7 @@ class ControlPlane:
         last: AxiomError | None = None
         for attempt in range(MAX_ATTEMPTS):
             try:
-                return self._once(url, data, headers)
+                return self._once(url, data, headers, operation, permission)
             except AxiomError as exc:
                 last = exc
                 if exc.status not in RETRY_STATUS or _resets_beyond_backoff(exc, self.backoff):
@@ -122,19 +157,32 @@ class ControlPlane:
                 time.sleep(self.backoff * (2**attempt))
         raise last if last is not None else AxiomError(0, "no attempt was made")
 
-    def _once(self, url: str, data: bytes, headers: dict[str, str]) -> Any:
+    def _once(
+        self,
+        url: str,
+        data: bytes,
+        headers: dict[str, str],
+        operation: str = "",
+        permission: str = "",
+    ) -> Any:
         request = urllib.request.Request(url, data=data, headers=headers, method="POST")
         try:
             with urllib.request.urlopen(request, timeout=self.timeout) as response:
                 raw = response.read().decode() or "{}"
         except urllib.error.HTTPError as exc:
-            raise AxiomError(exc.code, _message(exc.read()), _resets_at(exc.headers)) from exc
+            raise AxiomError(
+                exc.code,
+                _message(exc.read()),
+                _resets_at(exc.headers),
+                operation,
+                permission,
+            ) from exc
         except OSError as exc:
-            raise AxiomError(0, str(exc)) from exc
+            raise AxiomError(0, str(exc), None, operation, permission) from exc
         try:
             return json.loads(raw)
         except ValueError as exc:
-            raise AxiomError(200, "response was not json") from exc
+            raise AxiomError(200, "response was not json", None, operation, permission) from exc
 
 
 def _resets_at(headers: Any) -> int | None:

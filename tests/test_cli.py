@@ -352,3 +352,64 @@ def test_the_org_flag_skips_the_org_question(server, tmp_path, monkeypatch) -> N
         out=_Recorder(),
     )
     assert code == 0
+
+
+class _DeniedHandler(BaseHTTPRequestHandler):
+    body: bytes = b'{"message":"forbidden"}'
+
+    def do_POST(self) -> None:  # noqa: N802
+        self.send_response(403)
+        self.send_header("Content-Length", str(len(type(self).body)))
+        self.end_headers()
+        self.wfile.write(type(self).body)
+
+    def log_message(self, *args: Any) -> None:
+        return
+
+
+@pytest.fixture
+def denied_server():
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), _DeniedHandler)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    yield f"127.0.0.1:{httpd.server_port}"
+    httpd.shutdown()
+
+
+def test_a_denied_setup_names_the_call_and_the_permissions(
+    denied_server, tmp_path, monkeypatch
+) -> None:
+    _DeniedHandler.body = b'{"message":"forbidden"}'
+    _plain_http(monkeypatch)
+    out = _Recorder()
+    code = cli.run_setup(
+        _args(denied_server, tmp_path / ".env", token="xaat-mine"), ask=_never, out=out
+    )
+    assert code == 1
+    joined = "\n".join(out.lines)
+    assert "creating dataset 'hermes-traces' was refused (403)" in joined
+    assert "datasets: create" in joined
+    assert "apiTokens: create" in joined
+    assert "--org <org-id>" in joined
+    assert "settings/api-tokens" in joined
+
+
+def test_a_denied_setup_with_an_org_blames_that_org(denied_server, tmp_path, monkeypatch) -> None:
+    _plain_http(monkeypatch)
+    out = _Recorder()
+    cli.run_setup(
+        _args(denied_server, tmp_path / ".env", token="xaat-mine", org="my-org-7"),
+        ask=_never,
+        out=out,
+    )
+    joined = "\n".join(out.lines)
+    assert "'my-org-7'" in joined
+    assert "--org <org-id>" not in joined
+
+
+def test_a_detailed_denial_message_is_passed_through(denied_server, tmp_path, monkeypatch) -> None:
+    _DeniedHandler.body = b'{"message":"token does not have access to resource: datasets"}'
+    _plain_http(monkeypatch)
+    out = _Recorder()
+    cli.run_setup(_args(denied_server, tmp_path / ".env", token="xaat-mine"), ask=_never, out=out)
+    assert any("token does not have access" in line for line in out.lines)
+    _DeniedHandler.body = b'{"message":"forbidden"}'

@@ -10,7 +10,13 @@ from pathlib import Path
 from typing import Any
 
 from .config import Config
-from .control_plane import DEFAULT_DOMAIN, AxiomError, ControlPlane
+from .control_plane import (
+    DEFAULT_DOMAIN,
+    PERMISSION_DATASETS,
+    PERMISSION_TOKENS,
+    AxiomError,
+    ControlPlane,
+)
 from .provision import DEFAULT_PREFIX, Provisioned, env_values, provision, write_env
 
 COMMAND = "axiom"
@@ -97,7 +103,7 @@ def run_setup(
     try:
         result = provision(plane, prefix=args.prefix, region=args.region, org_token=org_token)
     except AxiomError as exc:
-        for line in _explain(exc, org_token):
+        for line in _explain(exc, org_token, org):
             out(line)
         return 1
 
@@ -107,8 +113,33 @@ def run_setup(
     return 0
 
 
-def _explain(exc: AxiomError, org_token: str | None) -> list[str]:
+TOKEN_SETTINGS_URL = "https://app.axiom.co/settings/api-tokens"
+
+
+def _explain_denied(exc: AxiomError, org: str) -> list[str]:
+    """Say which call was refused, what it needed, and the two usual causes."""
+    lines = [f"Setup failed: {exc.operation or 'the request'} was refused ({exc.status})."]
+    if exc.message and exc.message != "forbidden":
+        lines.append(f"  Axiom said: {exc.message}")
+    lines.append("")
+    lines.append("Setting up needs a token with both of these permissions:")
+    lines.append(f"  {PERMISSION_DATASETS}")
+    lines.append(f"  {PERMISSION_TOKENS}")
+    lines.append("")
+    lines.append("Two things cause this:")
+    lines.append(f"  1. The token lacks them. Create one at {TOKEN_SETTINGS_URL}")
+    if org:
+        lines.append(f"  2. The token does not belong to org {org!r}.")
+    else:
+        lines.append("  2. The token is not org-scoped and no org was given. Retry with:")
+        lines.append("       hermes axiom setup --token <token> --org <org-id>")
+    return lines
+
+
+def _explain(exc: AxiomError, org_token: str | None, org: str = "") -> list[str]:
     """Turn an API failure into something the operator can act on."""
+    if exc.status in (401, 403):
+        return _explain_denied(exc, org)
     if exc.status != 429 or org_token:
         return [f"Setup failed: {exc}"]
     lines = ["Setup failed: Axiom is rate limiting new orgs from this address."]
