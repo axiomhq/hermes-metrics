@@ -27,6 +27,7 @@ from .events import (
     stamp,
 )
 from .health import HealthMetrics
+from .inventory import ToolInventory
 from .logs import LogRecorder
 from .metrics import MetricRecorder
 from .pricing import PriceRecorder
@@ -96,6 +97,7 @@ class Runtime:
             meter = provider_m.get_meter(__package__)
             recorders.append(MetricRecorder(meter))
             recorders.append(PriceRecorder(meter))
+            recorders.append(ToolInventory(meter))
             HealthMetrics(meter, dispatcher)
 
         if SIGNAL_LOGS in transport.exporters:

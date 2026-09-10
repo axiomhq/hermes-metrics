@@ -53,5 +53,5 @@ files = ["hermess_metrics"]
 # Hermes ships without type information and is present only inside a Hermes
 # install, so its modules are imported defensively and typed as Any.
 [[tool.mypy.overrides]]
-module = ["agent.*"]
+module = ["agent.*", "tools.*"]
 ignore_missing_imports = true
