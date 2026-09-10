@@ -36,6 +36,7 @@ from .subagents import SubagentRecorder
 from .traces import TraceRecorder
 from .transport import Transport
 from .transport import build as build_transport
+from .turns import TurnRecorder
 
 # The payload schema this field mapping was written against.
 EXPECTED_SCHEMA = "hermes.observer.v1"
@@ -106,6 +107,7 @@ class Runtime:
             recorders.append(SkillInventory(meter))
             recorders.append(ApprovalRecorder(meter))
             recorders.append(SubagentRecorder(meter))
+            recorders.append(TurnRecorder(meter))
             HealthMetrics(meter, dispatcher)
 
         if SIGNAL_LOGS in transport.exporters:
