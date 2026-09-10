@@ -202,3 +202,31 @@ def test_the_token_can_read_back_what_it_wrote(server) -> None:
     ]
     for dataset in ("hermes-traces", "hermes-logs", "hermes-metrics"):
         assert capabilities[dataset] == {"ingest": ["create"], "query": ["read"]}
+
+
+def test_an_existing_org_token_skips_provisioning(server) -> None:
+    host, handler = server
+    plane = ControlPlane(domain=host, scheme="http", backoff=0.0)
+    result = provision(plane, prefix="mine", org_token="xaat-my-own")
+    paths = [request["path"] for request in handler.seen]
+    assert "/v2/orgs/provision" not in paths
+    assert paths == ["/v2/datasets"] * 3 + ["/v2/tokens"]
+    assert all(r["auth"] == "Bearer xaat-my-own" for r in handler.seen)
+    assert result.token == "xaat-ingest-only"
+
+
+def test_an_adopted_org_needs_no_claim(server) -> None:
+    host, _ = server
+    plane = ControlPlane(domain=host, scheme="http", backoff=0.0)
+    assert provision(plane, prefix="mine", org_token="xaat-my-own").needs_claim is False
+    assert _run(host).needs_claim is True
+
+
+def test_an_adopted_org_writes_no_claim_settings(server) -> None:
+    host, _ = server
+    plane = ControlPlane(domain=host, scheme="http", backoff=0.0)
+    values = env_values(provision(plane, prefix="mine", org_token="xaat-my-own"))
+    assert "HERMES_AXIOM_CLAIM_URL" not in values
+    assert "HERMES_AXIOM_ORG" not in values
+    assert "HERMES_AXIOM_EXPIRES_AT" not in values
+    assert values["HERMES_AXIOM_TRACES_DATASET"] == "mine-traces"

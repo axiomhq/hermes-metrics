@@ -29,23 +29,31 @@ logger = logging.getLogger(__name__)
 class Provisioned:
     """The org, its datasets, the scoped token, and the claim link."""
 
-    org_id: str
     domain: str
     region: str
-    expires_at: str
-    claim_url: str
     datasets: dict[str, str]
     token: str = field(repr=False)
+    org_id: str = ""
+    expires_at: str = ""
+    claim_url: str = field(default="", repr=False)
+
+    @property
+    def needs_claim(self) -> bool:
+        """A provisioned org is deleted unless a human claims it."""
+        return bool(self.claim_url)
 
 
 def provision(
-    plane: ControlPlane, prefix: str = DEFAULT_PREFIX, region: str | None = None
+    plane: ControlPlane,
+    prefix: str = DEFAULT_PREFIX,
+    region: str | None = None,
+    org_token: str | None = None,
 ) -> Provisioned:
-    """Create an org, its three datasets, and an ingest-only token."""
-    org = plane.provision_org(name=prefix, region=region)
+    """Create the datasets and a scoped token, in a given org or a new one."""
+    org = None if org_token else plane.provision_org(name=prefix, region=region)
     admin = ControlPlane(
         domain=plane.domain,
-        token=org.token,
+        token=org.token if org else str(org_token),
         scheme=plane.scheme,
         timeout=plane.timeout,
         backoff=plane.backoff,
@@ -55,19 +63,19 @@ def provision(
         admin.create_dataset(name, DATASET_KINDS[signal], DESCRIPTION)
     token = admin.create_ingest_token(TOKEN_NAME, list(datasets.values()), DESCRIPTION)
     return Provisioned(
-        org_id=org.id,
         domain=plane.domain,
-        region=org.region,
-        expires_at=org.expires_at,
-        claim_url=org.claim_url,
+        region=org.region if org else "",
         datasets=datasets,
         token=token,
+        org_id=org.id if org else "",
+        expires_at=org.expires_at if org else "",
+        claim_url=org.claim_url if org else "",
     )
 
 
 def env_values(provisioned: Provisioned) -> dict[str, str]:
     """The settings the plugin needs, ready to write to an env file."""
-    return {
+    values = {
         ENV_TOKEN: provisioned.token,
         ENV_DOMAIN: provisioned.domain,
         ENV_TRACES_DATASET: provisioned.datasets["traces"],
@@ -77,6 +85,7 @@ def env_values(provisioned: Provisioned) -> dict[str, str]:
         ENV_CLAIM_URL: provisioned.claim_url,
         ENV_EXPIRES_AT: provisioned.expires_at,
     }
+    return {key: value for key, value in values.items() if value}
 
 
 def write_env(path: Path, values: dict[str, str]) -> None:
