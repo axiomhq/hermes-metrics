@@ -148,6 +148,15 @@ def test_answering_one_provisions(server, tmp_path, monkeypatch) -> None:
     assert handler.seen[0]["path"] == "/v2/orgs/provision"
 
 
+def test_pressing_enter_provisions(server, tmp_path, monkeypatch) -> None:
+    host, handler = server
+    _plain_http(monkeypatch)
+    code = cli.run_setup(_args(host, tmp_path / ".env"), ask=_answers([""]), out=_Recorder())
+    assert code == 0
+    assert handler.seen[0]["path"] == "/v2/orgs/provision"
+    assert cli.QUESTION.endswith("[1]: ")
+
+
 def test_answering_two_asks_for_a_token(server, tmp_path, monkeypatch) -> None:
     host, handler = server
     _plain_http(monkeypatch)

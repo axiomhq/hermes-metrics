@@ -34,7 +34,7 @@ QUESTION = """Where should Hermes send its telemetry?
      Add apiTokens:create as well and setup will mint a narrow token to
      store instead of yours; without it your token is stored as-is.
 
-Choose 1 or 2: """
+Choose 1 or 2 [1]: """
 ORG_QUESTION = "Axiom org id (find it in the console URL; press enter if the token is org-scoped): "
 
 logger = logging.getLogger(__name__)
@@ -216,7 +216,7 @@ def _choose(ask: Callable[[str], str], args: argparse.Namespace) -> tuple[str | 
         return str(args.token), str(args.org or "")
     if args.provision:
         return None, ""
-    answer = ask(QUESTION).strip()
+    answer = ask(QUESTION).strip() or CHOICE_PROVISION
     if answer == CHOICE_PROVISION:
         return None, ""
     if answer == CHOICE_ADOPT:
