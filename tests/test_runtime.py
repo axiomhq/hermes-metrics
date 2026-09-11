@@ -12,9 +12,9 @@ from opentelemetry.sdk._logs.export import InMemoryLogRecordExporter
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
-from hermess_metrics.config import Config
-from hermess_metrics.runtime import EXPECTED_SCHEMA, HOOK_KINDS, Runtime
-from hermess_metrics.transport import Transport
+from hermes_metrics.config import Config
+from hermes_metrics.runtime import EXPECTED_SCHEMA, HOOK_KINDS, Runtime
+from hermes_metrics.transport import Transport
 
 ALL_ENV = {
     "HERMES_AXIOM_TOKEN": "xaat-test",

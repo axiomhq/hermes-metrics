@@ -12,8 +12,8 @@ from typing import Any
 
 import pytest
 
-from hermess_metrics.control_plane import ControlPlane
-from hermess_metrics.provision import Provisioned, env_values, provision, write_env
+from hermes_metrics.control_plane import ControlPlane
+from hermes_metrics.provision import Provisioned, env_values, provision, write_env
 
 ORG = {
     "id": "hermes-x1",
@@ -166,7 +166,7 @@ def test_writing_env_creates_missing_directories(tmp_path: Path) -> None:
 
 
 def test_a_failure_partway_through_surfaces(server, monkeypatch: pytest.MonkeyPatch) -> None:
-    from hermess_metrics import control_plane
+    from hermes_metrics import control_plane
 
     host, _ = server
     plane = ControlPlane(domain=host, scheme="http", backoff=0.0)
@@ -176,13 +176,13 @@ def test_a_failure_partway_through_surfaces(server, monkeypatch: pytest.MonkeyPa
 
 
 def _explode(self: Any, *args: Any, **kwargs: Any) -> Any:
-    from hermess_metrics.control_plane import AxiomError
+    from hermes_metrics.control_plane import AxiomError
 
     raise AxiomError(403, "not allowed")
 
 
 def test_the_written_file_round_trips_into_config(server, tmp_path: Path) -> None:
-    from hermess_metrics.config import Config
+    from hermes_metrics.config import Config
 
     host, _ = server
     target = tmp_path / ".env"
@@ -289,7 +289,7 @@ def test_a_granted_query_capability_is_kept(server) -> None:
 
 
 def test_a_non_permission_error_while_minting_is_not_retried(server, monkeypatch) -> None:
-    from hermess_metrics.control_plane import AxiomError
+    from hermes_metrics.control_plane import AxiomError
 
     host, handler = server
     plane = ControlPlane(domain=host, scheme="http", backoff=0.0)
@@ -315,8 +315,8 @@ def test_a_token_that_cannot_mint_keeps_the_supplied_one(no_query_server) -> Non
 
 def test_a_provisioned_org_never_keeps_the_full_permission_token(monkeypatch) -> None:
     """Keeping it would leave a token that can delete datasets in the env file."""
-    from hermess_metrics import provision as provision_module
-    from hermess_metrics.control_plane import AxiomError
+    from hermes_metrics import provision as provision_module
+    from hermes_metrics.control_plane import AxiomError
 
     def refuse(self: Any, *args: Any, **kwargs: Any) -> Any:
         raise AxiomError(403, "refused")
@@ -333,7 +333,7 @@ def test_a_provisioned_org_never_keeps_the_full_permission_token(monkeypatch) ->
 
 
 def _fake_org() -> Any:
-    from hermess_metrics.control_plane import ProvisionedOrg
+    from hermes_metrics.control_plane import ProvisionedOrg
 
     return ProvisionedOrg(
         id="o", name="n", region="r", expires_at="e", claim_url="c", token="xaat-full"

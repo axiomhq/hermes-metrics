@@ -10,7 +10,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from hermess_metrics.dispatch import _POLL_SECONDS, Dispatcher
+from hermes_metrics.dispatch import _POLL_SECONDS, Dispatcher
 
 FLUSH_TIMEOUT = 5.0
 

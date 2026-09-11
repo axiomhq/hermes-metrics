@@ -17,7 +17,7 @@ from .events import Event
 from .redaction import CLASS_MESSAGES, CLASS_TOOL_IO, Redactor
 
 SCHEMA_URL = "https://axiom.co/ai/schemas/0.0.2"
-SDK_NAME = "hermess-metrics"
+SDK_NAME = "hermes-metrics"
 AGENT_NAME = "hermes"
 DEFAULT_MAX_LIVE = 256
 

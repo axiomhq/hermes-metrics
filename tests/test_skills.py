@@ -10,8 +10,8 @@ import pytest
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import InMemoryMetricReader
 
-from hermess_metrics.events import stamp
-from hermess_metrics.skills import SKILL_TOOL, SkillInventory, scan_skills
+from hermes_metrics.events import stamp
+from hermes_metrics.skills import SKILL_TOOL, SkillInventory, scan_skills
 
 
 def _write_skill(root: Path, folder: str, name: str | None = None) -> None:
@@ -47,7 +47,7 @@ def inventory_and_reader(skills_root: Path):
     provider = MeterProvider(metric_readers=[reader])
     disabled: set[str] = set()
     inventory = SkillInventory(
-        provider.get_meter("hermess-metrics"),
+        provider.get_meter("hermes-metrics"),
         source=lambda: scan_skills([skills_root], disabled),
     )
     yield inventory, reader, disabled
@@ -132,7 +132,7 @@ def test_the_scan_is_cached_between_exports(inventory_and_reader, skills_root: P
 
 
 def test_the_real_hermes_directories_are_readable() -> None:
-    from hermess_metrics.skills import installed_skills
+    from hermes_metrics.skills import installed_skills
 
     assert isinstance(installed_skills(), dict)
 
@@ -175,7 +175,7 @@ def _raise_exclusion(path: Any) -> Any:
 def test_missing_hermes_directories_yield_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
     import agent.skill_utils as skill_utils
 
-    from hermess_metrics.skills import installed_skills
+    from hermes_metrics.skills import installed_skills
 
     monkeypatch.delattr(skill_utils, "get_all_skills_dirs")
     assert installed_skills() == {}

@@ -206,7 +206,7 @@
       "type": "LogStream"
     }
   ],
-  "description": "Spend, behaviour and health for this Hermes install, from the hermess-metrics plugin.",
+  "description": "Spend, behaviour and health for this Hermes install, from the hermes-metrics plugin.",
   "layout": [
     {
       "h": 2,

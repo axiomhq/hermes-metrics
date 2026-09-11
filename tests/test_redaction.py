@@ -9,7 +9,7 @@ import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from hermess_metrics.redaction import (
+from hermes_metrics.redaction import (
     CLASS_MESSAGES,
     CLASS_METADATA,
     CLASS_TOOL_IO,

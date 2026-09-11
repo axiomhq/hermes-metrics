@@ -36,25 +36,25 @@ def register(
 
     if not config.active:
         logger.warning(
-            "hermess-metrics is enabled but idle: %s; run `hermes axiom setup`",
+            "hermes-metrics is enabled but idle: %s; run `hermes axiom setup`",
             "; ".join(config.problems()),
         )
         return config
 
     hint = transport.sdk_hint()
     if hint is not None:
-        logger.warning("hermess-metrics is enabled but idle: %s", hint)
+        logger.warning("hermes-metrics is enabled but idle: %s", hint)
         return config
 
     try:
         runtime = runtime_factory(config)
         hooks = runtime.register_hooks(ctx)
     except Exception:
-        logger.warning("hermess-metrics could not start; Hermes continues", exc_info=True)
+        logger.warning("hermes-metrics could not start; Hermes continues", exc_info=True)
         return config
 
     logger.info(
-        "hermess-metrics loaded: domain=%s signals=%s redaction=%s hooks=%d",
+        "hermes-metrics loaded: domain=%s signals=%s redaction=%s hooks=%d",
         config.domain,
         ", ".join(config.configured_signals),
         config.redaction,

@@ -11,8 +11,8 @@ import pytest
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import InMemoryMetricReader
 
-from hermess_metrics.events import stamp
-from hermess_metrics.pricing import PriceRecorder, resolve
+from hermes_metrics.events import stamp
+from hermes_metrics.pricing import PriceRecorder, resolve
 
 MODEL = "claude-opus-4-5"
 
@@ -21,7 +21,7 @@ MODEL = "claude-opus-4-5"
 def recorder_and_reader():
     reader = InMemoryMetricReader()
     provider = MeterProvider(metric_readers=[reader])
-    yield PriceRecorder(provider.get_meter("hermess-metrics")), reader
+    yield PriceRecorder(provider.get_meter("hermes-metrics")), reader
 
 
 def _points(reader: InMemoryMetricReader) -> dict[str, list[Any]]:
@@ -78,7 +78,7 @@ def test_a_subscription_included_route_is_priced_at_zero(recorder_and_reader) ->
 
 def test_a_models_api_route_is_resolved_off_thread(recorder_and_reader, monkeypatch) -> None:
     """OpenRouter rates come from a fetch, so they must never block the export path."""
-    from hermess_metrics import pricing
+    from hermes_metrics import pricing
 
     started = threading.Event()
     release = threading.Event()
@@ -106,7 +106,7 @@ def test_a_models_api_route_is_resolved_off_thread(recorder_and_reader, monkeypa
 
 
 def test_a_models_api_route_is_only_fetched_once(recorder_and_reader, monkeypatch) -> None:
-    from hermess_metrics import pricing
+    from hermes_metrics import pricing
 
     calls: list[tuple[str, str]] = []
 
@@ -124,7 +124,7 @@ def test_a_models_api_route_is_only_fetched_once(recorder_and_reader, monkeypatc
 
 
 def test_a_failed_fetch_is_not_retried_forever(recorder_and_reader, monkeypatch) -> None:
-    from hermess_metrics import pricing
+    from hermes_metrics import pricing
 
     calls: list[str] = []
     monkeypatch.setattr(pricing, "_lookup", lambda model, provider: calls.append(model) or None)
@@ -154,7 +154,7 @@ def test_the_tracked_model_set_is_bounded() -> None:
     from agent.usage_pricing import _OFFICIAL_DOCS_PRICING
 
     provider = MeterProvider(metric_readers=[InMemoryMetricReader()])
-    recorder = PriceRecorder(provider.get_meter("hermess-metrics"), max_tracked=4)
+    recorder = PriceRecorder(provider.get_meter("hermes-metrics"), max_tracked=4)
     priced = [(p, m) for p, m in sorted(_OFFICIAL_DOCS_PRICING) if resolve(m, p) is not None]
     assert len(priced) > 4
     for route_provider, model in priced:
@@ -172,7 +172,7 @@ def test_kinds_this_recorder_does_not_consume_are_ignored(recorder_and_reader) -
 def test_a_pricing_lookup_that_raises_is_treated_as_unpriced(
     recorder_and_reader, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from hermess_metrics import pricing
+    from hermes_metrics import pricing
 
     monkeypatch.setattr(pricing, "_entry_for", _raise)
     recorder, reader = recorder_and_reader
@@ -193,7 +193,7 @@ def test_an_event_without_a_model_is_ignored(recorder_and_reader) -> None:
 def test_a_route_with_an_empty_rate_set_is_treated_as_unpriced(
     recorder_and_reader, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from hermess_metrics import pricing
+    from hermes_metrics import pricing
 
     monkeypatch.setattr(pricing, "_entry_for", lambda model, provider: object())
     recorder, reader = recorder_and_reader
@@ -266,7 +266,7 @@ def test_a_call_without_usage_is_not_charged(recorder_and_reader) -> None:
 
 def test_a_stale_rate_is_refreshed_and_the_new_one_charged(monkeypatch) -> None:
     """A rate change has to show up, or the price-rise alert can never fire."""
-    from hermess_metrics import pricing
+    from hermes_metrics import pricing
 
     reader = InMemoryMetricReader()
     provider = MeterProvider(metric_readers=[reader])
@@ -295,7 +295,7 @@ def test_a_stale_rate_is_refreshed_and_the_new_one_charged(monkeypatch) -> None:
 
 
 def test_a_fresh_rate_is_not_refetched(monkeypatch) -> None:
-    from hermess_metrics import pricing
+    from hermes_metrics import pricing
 
     provider = MeterProvider(metric_readers=[InMemoryMetricReader()])
     recorder = PriceRecorder(provider.get_meter("x"), ttl_seconds=3600.0)
@@ -311,7 +311,7 @@ def test_a_fresh_rate_is_not_refetched(monkeypatch) -> None:
 
 
 def test_a_refresh_that_fails_keeps_the_rate_it_had(monkeypatch) -> None:
-    from hermess_metrics import pricing
+    from hermes_metrics import pricing
 
     reader = InMemoryMetricReader()
     provider = MeterProvider(metric_readers=[reader])

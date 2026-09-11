@@ -20,7 +20,7 @@ from .config import (
 from .control_plane import DATASET_KINDS, AxiomError, ControlPlane
 
 DEFAULT_PREFIX = "hermes"
-TOKEN_NAME = "hermess-metrics ingest"
+TOKEN_NAME = "hermes-metrics ingest"
 DESCRIPTION = "Hermes agent telemetry"
 
 logger = logging.getLogger(__name__)

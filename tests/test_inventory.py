@@ -9,8 +9,8 @@ import pytest
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import InMemoryMetricReader
 
-from hermess_metrics.events import stamp
-from hermess_metrics.inventory import MAX_TRACKED, ToolInventory
+from hermes_metrics.events import stamp
+from hermes_metrics.inventory import MAX_TRACKED, ToolInventory
 
 INSTALLED = {"terminal": "shell", "read_file": "files", "skill_view": "skills"}
 
@@ -32,7 +32,7 @@ def inventory_and_reader():
     reader = InMemoryMetricReader()
     provider = MeterProvider(metric_readers=[reader])
     installed = dict(INSTALLED)
-    inventory = ToolInventory(provider.get_meter("hermess-metrics"), source=lambda: installed)
+    inventory = ToolInventory(provider.get_meter("hermes-metrics"), source=lambda: installed)
     yield inventory, reader, installed
 
 
@@ -117,7 +117,7 @@ def test_the_real_registry_is_readable() -> None:
     import tools.file_tools  # noqa: F401
     import tools.skills_tool  # noqa: F401
 
-    from hermess_metrics.inventory import installed_tools
+    from hermes_metrics.inventory import installed_tools
 
     found = installed_tools()
     assert "skill_view" in found
@@ -127,7 +127,7 @@ def test_the_real_registry_is_readable() -> None:
 def test_an_unreadable_registry_yields_an_empty_inventory(monkeypatch: pytest.MonkeyPatch) -> None:
     import tools.registry as registry_module
 
-    from hermess_metrics.inventory import installed_tools
+    from hermes_metrics.inventory import installed_tools
 
     monkeypatch.delattr(registry_module, "registry")
     assert installed_tools() == {}
@@ -136,7 +136,7 @@ def test_an_unreadable_registry_yields_an_empty_inventory(monkeypatch: pytest.Mo
 def test_a_tool_whose_entry_cannot_be_read_still_lists(monkeypatch: pytest.MonkeyPatch) -> None:
     import tools.registry as registry_module
 
-    from hermess_metrics.inventory import UNKNOWN_TOOLSET, installed_tools
+    from hermes_metrics.inventory import UNKNOWN_TOOLSET, installed_tools
 
     monkeypatch.setattr(registry_module.registry, "get_all_tool_names", lambda: ["mystery"])
     monkeypatch.setattr(registry_module.registry, "get_entry", _raise_entry)

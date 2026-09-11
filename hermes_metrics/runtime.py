@@ -145,7 +145,7 @@ class Runtime:
             return
         self._schema_reported = True
         logger.warning(
-            "hermess-metrics expects hook payload schema %s but Hermes sent %s; "
+            "hermes-metrics expects hook payload schema %s but Hermes sent %s; "
             "the field mapping may be stale",
             EXPECTED_SCHEMA,
             version,
@@ -166,7 +166,7 @@ class Runtime:
             self._check_schema(payload)
             self.dispatcher.submit(stamp(kind, payload))
 
-        observe.__name__ = f"hermess_metrics_{kind}"
+        observe.__name__ = f"hermes_metrics_{kind}"
         return observe
 
     def register_hooks(self, ctx: Any) -> tuple[str, ...]:

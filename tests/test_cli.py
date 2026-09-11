@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 
-from hermess_metrics import cli
+from hermes_metrics import cli
 
 ORG = {
     "id": "hermes-x1",
@@ -86,7 +86,7 @@ def _args(host: str, target: Path, **overrides: Any) -> argparse.Namespace:
 
 
 def _plain_http(monkeypatch: pytest.MonkeyPatch) -> None:
-    from hermess_metrics import control_plane
+    from hermes_metrics import control_plane
 
     original = control_plane.ControlPlane
 
@@ -486,7 +486,7 @@ def test_the_token_flag_help_names_both_permissions() -> None:
 
 
 def test_an_ingest_only_token_is_called_out(server, tmp_path, monkeypatch) -> None:
-    from hermess_metrics import provision as provision_module
+    from hermes_metrics import provision as provision_module
 
     host, _ = server
     _plain_http(monkeypatch)
@@ -501,7 +501,7 @@ def test_an_ingest_only_token_is_called_out(server, tmp_path, monkeypatch) -> No
 
 
 def test_keeping_the_supplied_token_is_called_out(server, tmp_path, monkeypatch) -> None:
-    from hermess_metrics import provision as provision_module
+    from hermes_metrics import provision as provision_module
 
     host, _ = server
     _plain_http(monkeypatch)
@@ -519,7 +519,7 @@ def test_keeping_the_supplied_token_is_called_out(server, tmp_path, monkeypatch)
 
 def test_status_reports_a_missing_sdk_rather_than_claiming_it_is_on(monkeypatch) -> None:
     """A drop-in install copies the plugin but not opentelemetry."""
-    from hermess_metrics import transport
+    from hermes_metrics import transport
 
     monkeypatch.setenv("HERMES_AXIOM_TOKEN", "xaat-1")
     monkeypatch.setenv("HERMES_AXIOM_TRACES_DATASET", "t")
@@ -533,7 +533,7 @@ def test_status_reports_a_missing_sdk_rather_than_claiming_it_is_on(monkeypatch)
 
 
 def test_status_names_both_problems_when_both_apply(monkeypatch) -> None:
-    from hermess_metrics import transport
+    from hermes_metrics import transport
 
     for name in ("HERMES_AXIOM_TOKEN", "HERMES_AXIOM_TRACES_DATASET"):
         monkeypatch.delenv(name, raising=False)
@@ -684,7 +684,7 @@ def test_the_console_hint_is_printed_after_success(monkeypatch) -> None:
 
 
 def test_the_chosen_budget_reaches_the_monitor(monkeypatch) -> None:
-    from hermess_metrics import alerts as alerts_module
+    from hermes_metrics import alerts as alerts_module
 
     specs = alerts_module.pack(
         {"metrics": "hermes-metrics"}, alerts_module.Budgets(tokens_per_15m=123, spend_per_hour=4.5)

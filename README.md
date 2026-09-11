@@ -1,4 +1,4 @@
-# hermess-metrics
+# hermes-metrics
 
 Ships [Hermes](https://hermes-agent.nousresearch.com) agent telemetry to
 [Axiom](https://axiom.co) as OpenTelemetry traces, metrics and logs. Spend per
@@ -19,8 +19,8 @@ Install it into the same Python that runs `hermes`, enable it, and answer one
 question:
 
 ```sh
-pip install 'hermess-metrics[otlp] @ git+https://github.com/axiomhq/hermess-metrics'
-hermes plugins enable hermess-metrics
+pip install 'hermes-metrics[otlp] @ git+https://github.com/axiomhq/hermes-metrics'
+hermes plugins enable hermes-metrics
 hermes axiom setup
 ```
 

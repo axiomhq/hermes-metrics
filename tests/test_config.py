@@ -6,7 +6,7 @@ from __future__ import annotations
 from hypothesis import given
 from hypothesis import strategies as st
 
-from hermess_metrics.config import ENV_PREFIX, Config
+from hermes_metrics.config import ENV_PREFIX, Config
 
 FULL_ENV = {
     "HERMES_AXIOM_TOKEN": "xaat-secret",

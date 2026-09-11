@@ -9,7 +9,7 @@ import pytest
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import InMemoryMetricReader
 
-from hermess_metrics.containers import ContainerStats, parse_bytes, parse_percent
+from hermes_metrics.containers import ContainerStats, parse_bytes, parse_percent
 
 PS_OUTPUT = "abc123\ndef456\n"
 STATS_OUTPUT = (
@@ -33,7 +33,7 @@ def stats_and_reader():
     reader = InMemoryMetricReader()
     provider = MeterProvider(metric_readers=[reader])
     runner = _runner({"ps": PS_OUTPUT, "stats": STATS_OUTPUT})
-    yield ContainerStats(provider.get_meter("hermess-metrics"), runner=runner), reader
+    yield ContainerStats(provider.get_meter("hermes-metrics"), runner=runner), reader
 
 
 def _points(reader: InMemoryMetricReader) -> dict[str, dict[str, Any]]:
@@ -145,6 +145,6 @@ def test_an_unparseable_size_is_none(text: str) -> None:
 
 
 def test_the_real_runner_returns_command_output() -> None:
-    from hermess_metrics.containers import run_docker
+    from hermes_metrics.containers import run_docker
 
     assert run_docker(["echo", "hello"]).strip() == "hello"

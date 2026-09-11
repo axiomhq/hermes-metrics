@@ -12,10 +12,10 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
-from hermess_metrics.dispatch import Dispatcher
-from hermess_metrics.events import stamp
-from hermess_metrics.redaction import LEVEL_FULL, LEVEL_METADATA, MASK, Redactor
-from hermess_metrics.traces import TraceRecorder
+from hermes_metrics.dispatch import Dispatcher
+from hermes_metrics.events import stamp
+from hermes_metrics.redaction import LEVEL_FULL, LEVEL_METADATA, MASK, Redactor
+from hermes_metrics.traces import TraceRecorder
 
 
 def send(dispatcher: Dispatcher[object], kind: str, **payload: Any) -> None:
@@ -35,7 +35,7 @@ def recorder_and_spans(request: pytest.FixtureRequest):
     provider.add_span_processor(SimpleSpanProcessor(exporter))
     dispatcher: Dispatcher[object] = Dispatcher(capacity=256)
     recorder = TraceRecorder(
-        tracer=provider.get_tracer("hermess-metrics"),
+        tracer=provider.get_tracer("hermes-metrics"),
         redactor=Redactor.for_level(level),
     )
     dispatcher.start(recorder.handle)
@@ -130,7 +130,7 @@ def test_axiom_required_attributes_are_present(recorder_and_spans) -> None:
     chat = _drain(dispatcher, exporter)["chat claude-opus-5"]
     for name in ("gen_ai.operation.name", "gen_ai.capability.name", "gen_ai.step.name"):
         assert chat.attributes[name]
-    assert chat.attributes["axiom.gen_ai.sdk.name"] == "hermess-metrics"
+    assert chat.attributes["axiom.gen_ai.sdk.name"] == "hermes-metrics"
     assert chat.attributes["axiom.gen_ai.schema_url"].startswith("https://axiom.co/ai/schemas/")
 
 
@@ -336,7 +336,7 @@ def test_structural_spans_start_when_the_hook_fired_not_when_the_worker_ran() ->
     provider.add_span_processor(SimpleSpanProcessor(exporter))
     dispatcher: Dispatcher[object] = Dispatcher(capacity=32)
     recorder = TraceRecorder(
-        tracer=provider.get_tracer("hermess-metrics"),
+        tracer=provider.get_tracer("hermes-metrics"),
         redactor=Redactor.for_level(LEVEL_METADATA),
     )
     release = threading.Event()

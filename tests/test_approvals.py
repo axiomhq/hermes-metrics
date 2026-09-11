@@ -9,8 +9,8 @@ import pytest
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import InMemoryMetricReader
 
-from hermess_metrics.approvals import OTHER_PATTERN, ApprovalRecorder
-from hermess_metrics.events import stamp
+from hermes_metrics.approvals import OTHER_PATTERN, ApprovalRecorder
+from hermes_metrics.events import stamp
 
 SECRET_COMMAND = "curl -H 'Authorization: Bearer sk-live-secret' https://x"
 
@@ -19,7 +19,7 @@ SECRET_COMMAND = "curl -H 'Authorization: Bearer sk-live-secret' https://x"
 def recorder_and_reader():
     reader = InMemoryMetricReader()
     provider = MeterProvider(metric_readers=[reader])
-    yield ApprovalRecorder(provider.get_meter("hermess-metrics")), reader
+    yield ApprovalRecorder(provider.get_meter("hermes-metrics")), reader
 
 
 def _points(reader: InMemoryMetricReader) -> dict[str, list[Any]]:

@@ -10,9 +10,9 @@ import pytest
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import InMemoryMetricReader
 
-from hermess_metrics.dispatch import Dispatcher
-from hermess_metrics.events import stamp
-from hermess_metrics.metrics import MetricRecorder
+from hermes_metrics.dispatch import Dispatcher
+from hermes_metrics.events import stamp
+from hermes_metrics.metrics import MetricRecorder
 
 
 def send(dispatcher: Dispatcher[object], kind: str, **payload: Any) -> None:
@@ -31,7 +31,7 @@ def recorder_and_reader():
     reader = InMemoryMetricReader()
     provider = MeterProvider(metric_readers=[reader])
     dispatcher: Dispatcher[object] = Dispatcher(capacity=256)
-    recorder = MetricRecorder(meter=provider.get_meter("hermess-metrics"))
+    recorder = MetricRecorder(meter=provider.get_meter("hermes-metrics"))
     dispatcher.start(recorder.handle)
     yield recorder, reader, dispatcher
     dispatcher.stop(FLUSH)

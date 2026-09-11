@@ -10,8 +10,8 @@ import pytest
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import InMemoryMetricReader
 
-from hermess_metrics.events import Event, stamp
-from hermess_metrics.turns import TurnRecorder
+from hermes_metrics.events import Event, stamp
+from hermes_metrics.turns import TurnRecorder
 
 TURN = "turn-1"
 
@@ -20,7 +20,7 @@ TURN = "turn-1"
 def recorder_and_reader():
     reader = InMemoryMetricReader()
     provider = MeterProvider(metric_readers=[reader])
-    yield TurnRecorder(provider.get_meter("hermess-metrics")), reader
+    yield TurnRecorder(provider.get_meter("hermes-metrics")), reader
 
 
 def _points(reader: InMemoryMetricReader) -> dict[str, list[Any]]:

@@ -7,8 +7,8 @@ from typing import Any
 
 import pytest
 
-from hermess_metrics import alerts
-from hermess_metrics.control_plane import AxiomError
+from hermes_metrics import alerts
+from hermes_metrics.control_plane import AxiomError
 
 DATASETS = {"metrics": "hermes-metrics", "traces": "hermes-traces", "logs": "hermes-logs"}
 EXPECTED = 7

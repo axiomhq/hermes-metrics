@@ -10,7 +10,7 @@ from typing import Any
 
 import pytest
 
-from hermess_metrics.control_plane import (
+from hermes_metrics.control_plane import (
     DATASET_KINDS,
     AxiomError,
     ControlPlane,
@@ -214,7 +214,7 @@ def test_a_non_json_error_body_is_reported_verbatim(server) -> None:
 def test_backoff_is_applied_between_attempts(server, monkeypatch: pytest.MonkeyPatch) -> None:
     host, handler = server
     slept: list[float] = []
-    monkeypatch.setattr("hermess_metrics.control_plane.time.sleep", slept.append)
+    monkeypatch.setattr("hermes_metrics.control_plane.time.sleep", slept.append)
     handler.script["/v2/datasets"] = ([(503, {}), (200, {"name": "x"})], None)
     ControlPlane(domain=host, token="t", scheme="http", backoff=0.25).create_dataset(
         "x", DATASET_KINDS["logs"]
@@ -281,7 +281,7 @@ def test_an_imminent_rate_limit_is_retried(limited) -> None:
 
 
 def test_an_unreadable_rate_limit_header_is_ignored() -> None:
-    from hermess_metrics.control_plane import _resets_at
+    from hermes_metrics.control_plane import _resets_at
 
     class Headers:
         def get(self, name: str) -> str:
@@ -330,7 +330,7 @@ def test_a_token_accepted_by_any_read_is_reported_as_accepted(server) -> None:
 
 
 def test_an_unreadable_trace_header_is_ignored() -> None:
-    from hermess_metrics.control_plane import _trace_id
+    from hermes_metrics.control_plane import _trace_id
 
     assert _trace_id(None) == ""
 
@@ -358,7 +358,7 @@ def test_creating_a_monitor_sends_it_and_names_the_permission(server) -> None:
 
 
 def test_a_refused_monitor_names_the_permission_it_needed(server) -> None:
-    from hermess_metrics.control_plane import PERMISSION_MONITORS
+    from hermes_metrics.control_plane import PERMISSION_MONITORS
 
     host, handler = server
     handler.script["/v2/monitors"] = (403, {"message": "nope"})
@@ -369,7 +369,7 @@ def test_a_refused_monitor_names_the_permission_it_needed(server) -> None:
 
 def test_a_minted_token_can_also_alert(server) -> None:
     """Otherwise the very next command needs a different token."""
-    from hermess_metrics.control_plane import ALERTING_CAPABILITIES
+    from hermes_metrics.control_plane import ALERTING_CAPABILITIES
 
     host, handler = server
     handler.script["/v2/tokens"] = (200, {"token": "xaat-scoped"})

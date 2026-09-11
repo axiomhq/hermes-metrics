@@ -5,8 +5,8 @@ from __future__ import annotations
 
 import pytest
 
-from hermess_metrics import transport
-from hermess_metrics.config import Config
+from hermes_metrics import transport
+from hermes_metrics.config import Config
 
 ALL_ENV = {
     "HERMES_AXIOM_TOKEN": "xaat-secret",
@@ -66,7 +66,7 @@ def built_headers(signal: str) -> dict[str, str]:
 def test_resource_identifies_the_service_and_this_plugin() -> None:
     attributes = transport.build(Config.from_env(ALL_ENV)).resource.attributes
     assert attributes["service.name"] == "hermes"
-    assert attributes["telemetry.distro.name"] == "hermess-metrics"
+    assert attributes["telemetry.distro.name"] == "hermes-metrics"
 
 
 def test_service_name_is_configurable() -> None:

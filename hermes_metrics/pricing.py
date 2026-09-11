@@ -169,7 +169,7 @@ class PriceRecorder:
             self._pending.add(key)
         provider, model = key
         thread = threading.Thread(
-            target=self._fetch, args=(key, model, provider), name="hermess-pricing", daemon=True
+            target=self._fetch, args=(key, model, provider), name="hermes-pricing", daemon=True
         )
         thread.start()
 
@@ -218,5 +218,5 @@ class PriceRecorder:
                 if name in rates.values
             ]
 
-        observe.__name__ = f"hermess_metrics_{name}"
+        observe.__name__ = f"hermes_metrics_{name}"
         return observe

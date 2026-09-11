@@ -11,7 +11,7 @@ from .config import SIGNAL_LOGS, SIGNAL_METRICS, SIGNAL_TRACES, Config
 
 EXPORT_TIMEOUT_SECONDS = 10.0
 
-SDK_HINT = "the opentelemetry SDK is required: pip install 'hermess-metrics[otlp]'"
+SDK_HINT = "the opentelemetry SDK is required: pip install 'hermes-metrics[otlp]'"
 
 
 class TransportUnavailable(RuntimeError):
@@ -76,7 +76,7 @@ def _resource(config: Config, distro_version: str) -> Any:
     return Resource.create(
         {
             "service.name": config.service_name,
-            "telemetry.distro.name": "hermess-metrics",
+            "telemetry.distro.name": "hermes-metrics",
             "telemetry.distro.version": distro_version,
         }
     )

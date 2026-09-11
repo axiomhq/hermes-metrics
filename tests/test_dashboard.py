@@ -7,7 +7,7 @@ import json
 
 import pytest
 
-from hermess_metrics import dashboard
+from hermes_metrics import dashboard
 
 DATASETS = {"metrics": "m-set", "traces": "t-set", "logs": "l-set"}
 
@@ -18,10 +18,10 @@ def test_the_template_ships_with_the_package() -> None:
 
 def test_the_template_carries_no_real_dataset_names() -> None:
     """Otherwise it would chart the org it was captured from."""
-    raw = dashboard.TEMPLATE.read_text()
-    assert "hermes-metrics" not in raw
-    assert "hermes-traces" not in raw
-    assert "hermes-logs" not in raw
+    charts = json.loads(dashboard.TEMPLATE.read_text())["charts"]
+    queries = json.dumps([chart.get("query", {}) for chart in charts])
+    for dataset in ("hermes-metrics", "hermes-traces", "hermes-logs"):
+        assert dataset not in queries
 
 
 def test_every_placeholder_is_substituted() -> None:

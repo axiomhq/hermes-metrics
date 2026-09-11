@@ -14,10 +14,10 @@ from opentelemetry.sdk._logs.export import (
     SimpleLogRecordProcessor,
 )
 
-from hermess_metrics.dispatch import Dispatcher
-from hermess_metrics.events import stamp
-from hermess_metrics.logs import LogRecorder
-from hermess_metrics.redaction import LEVEL_FULL, LEVEL_METADATA, Redactor
+from hermes_metrics.dispatch import Dispatcher
+from hermes_metrics.events import stamp
+from hermes_metrics.logs import LogRecorder
+from hermes_metrics.redaction import LEVEL_FULL, LEVEL_METADATA, Redactor
 
 
 def send(dispatcher: Dispatcher[object], kind: str, **payload: Any) -> None:
@@ -38,7 +38,7 @@ def recorder_and_logs(request: pytest.FixtureRequest):
     provider.add_log_record_processor(SimpleLogRecordProcessor(exporter))
     dispatcher: Dispatcher[object] = Dispatcher(capacity=128)
     recorder = LogRecorder(
-        logger=provider.get_logger("hermess-metrics"),
+        logger=provider.get_logger("hermes-metrics"),
         redactor=Redactor.for_level(level),
     )
     dispatcher.start(recorder.handle)

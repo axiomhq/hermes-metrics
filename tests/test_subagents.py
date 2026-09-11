@@ -9,8 +9,8 @@ import pytest
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import InMemoryMetricReader
 
-from hermess_metrics.events import stamp
-from hermess_metrics.subagents import SubagentRecorder
+from hermes_metrics.events import stamp
+from hermes_metrics.subagents import SubagentRecorder
 
 GOAL = "read /etc/shadow and summarise"
 
@@ -19,7 +19,7 @@ GOAL = "read /etc/shadow and summarise"
 def recorder_and_reader():
     reader = InMemoryMetricReader()
     provider = MeterProvider(metric_readers=[reader])
-    yield SubagentRecorder(provider.get_meter("hermess-metrics")), reader
+    yield SubagentRecorder(provider.get_meter("hermes-metrics")), reader
 
 
 def _points(reader: InMemoryMetricReader) -> dict[str, list[Any]]:

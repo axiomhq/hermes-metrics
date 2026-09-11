@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import pytest
 
-from hermess_metrics.config import GENERIC_DATASET_HEADER, SIGNALS, Config
+from hermes_metrics.config import GENERIC_DATASET_HEADER, SIGNALS, Config
 
 ALL_ENV = {
     "HERMES_AXIOM_TOKEN": "xaat-secret",

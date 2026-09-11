@@ -10,8 +10,8 @@ import pytest
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import InMemoryMetricReader
 
-from hermess_metrics.dispatch import Dispatcher
-from hermess_metrics.health import HealthMetrics
+from hermes_metrics.dispatch import Dispatcher
+from hermes_metrics.health import HealthMetrics
 
 FLUSH = 5.0
 
@@ -32,7 +32,7 @@ def wired():
     reader = InMemoryMetricReader()
     provider = MeterProvider(metric_readers=[reader])
     dispatcher: Dispatcher[Any] = Dispatcher(capacity=4)
-    HealthMetrics(provider.get_meter("hermess-metrics"), dispatcher)
+    HealthMetrics(provider.get_meter("hermes-metrics"), dispatcher)
     yield dispatcher, reader
     dispatcher.stop(FLUSH)
 

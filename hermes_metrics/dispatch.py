@@ -70,7 +70,7 @@ class Dispatcher(Generic[T]):
         self._worker = threading.Thread(
             target=self._run,
             args=(handler,),
-            name="hermess-metrics",
+            name="hermes-metrics",
             daemon=True,
         )
         self._worker.start()
@@ -137,7 +137,7 @@ class Dispatcher(Generic[T]):
             except Exception:
                 with self._lock:
                     self._failed += 1
-                logger.warning("hermess-metrics handler failed", exc_info=True)
+                logger.warning("hermes-metrics handler failed", exc_info=True)
             else:
                 with self._lock:
                     self._handled += 1

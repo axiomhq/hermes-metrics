@@ -150,7 +150,7 @@ class ContainerStats:
                 if getattr(sample, field) is not None
             ]
 
-        observe.__name__ = f"hermess_metrics_container_{field}"
+        observe.__name__ = f"hermes_metrics_container_{field}"
         return observe
 
     def _running_callback(self, options: CallbackOptions) -> Iterable[Observation]:

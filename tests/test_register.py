@@ -9,9 +9,9 @@ from typing import Any
 from hypothesis import given
 from hypothesis import strategies as st
 
-import hermess_metrics
-from hermess_metrics.config import Config
-from hermess_metrics.runtime import HOOK_KINDS
+import hermes_metrics
+from hermes_metrics.config import Config
+from hermes_metrics.runtime import HOOK_KINDS
 
 
 class FakeCtx:
@@ -43,13 +43,13 @@ FULL_ENV = {
 
 
 def test_register_is_exported_at_package_level() -> None:
-    assert callable(hermess_metrics.register)
+    assert callable(hermes_metrics.register)
 
 
 def test_register_on_inactive_config_observes_nothing() -> None:
     """Setup stays reachable while idle; that is how the operator fixes it."""
     ctx = FakeCtx()
-    hermess_metrics.register(ctx, env={})
+    hermes_metrics.register(ctx, env={})
     assert ctx.hooks == []
     assert ctx.tools == []
     assert ctx.middleware == []
@@ -57,13 +57,13 @@ def test_register_on_inactive_config_observes_nothing() -> None:
 
 def test_register_on_active_config_subscribes_to_the_hooks() -> None:
     ctx = FakeCtx()
-    hermess_metrics.register(ctx, env=FULL_ENV, runtime_factory=_FakeRuntime)
+    hermes_metrics.register(ctx, env=FULL_ENV, runtime_factory=_FakeRuntime)
     assert [name for name, _ in ctx.hooks] == list(HOOK_KINDS) + ["on_session_finalize"]
 
 
 def test_register_survives_a_runtime_that_cannot_start() -> None:
     ctx = FakeCtx()
-    config = hermess_metrics.register(ctx, env=FULL_ENV, runtime_factory=_explode)
+    config = hermes_metrics.register(ctx, env=FULL_ENV, runtime_factory=_explode)
     assert config.active
     assert ctx.hooks == []
     assert ctx.cli_commands == ["axiom"]
@@ -85,7 +85,7 @@ class _FakeRuntime:
 
 def test_register_reports_the_posture_it_resolved() -> None:
     ctx = FakeCtx()
-    cfg = hermess_metrics.register(ctx, env=FULL_ENV)
+    cfg = hermes_metrics.register(ctx, env=FULL_ENV)
     assert isinstance(cfg, Config)
     assert cfg.active
 
@@ -93,7 +93,7 @@ def test_register_reports_the_posture_it_resolved() -> None:
 def test_register_defaults_to_the_process_environment(monkeypatch: Any) -> None:
     for name in Config.env_names():
         monkeypatch.delenv(name, raising=False)
-    assert hermess_metrics.register(FakeCtx()).active is False
+    assert hermes_metrics.register(FakeCtx()).active is False
 
 
 # Hermes swallows a raising plugin, so a raise here is silent breakage.
@@ -105,16 +105,16 @@ def test_register_defaults_to_the_process_environment(monkeypatch: Any) -> None:
     )
 )
 def test_register_never_raises(env: dict[str, str]) -> None:
-    hermess_metrics.register(FakeCtx(), env=env, runtime_factory=_FakeRuntime)
+    hermes_metrics.register(FakeCtx(), env=env, runtime_factory=_FakeRuntime)
 
 
 def test_register_stays_idle_when_the_otlp_extra_is_absent(monkeypatch: Any) -> None:
     """The command must exist here too; a drop-in install lands in exactly this state."""
-    from hermess_metrics import transport
+    from hermes_metrics import transport
 
     monkeypatch.setattr(transport, "sdk_hint", lambda: "the opentelemetry SDK is required")
     ctx = FakeCtx()
-    config = hermess_metrics.register(ctx, env=FULL_ENV, runtime_factory=_FakeRuntime)
+    config = hermes_metrics.register(ctx, env=FULL_ENV, runtime_factory=_FakeRuntime)
     assert config.active
     assert ctx.hooks == []
     assert ctx.cli_commands == ["axiom"]
@@ -122,19 +122,19 @@ def test_register_stays_idle_when_the_otlp_extra_is_absent(monkeypatch: Any) -> 
 
 def test_the_setup_command_is_available_even_when_idle() -> None:
     ctx = FakeCtx()
-    hermess_metrics.register(ctx, env={})
+    hermes_metrics.register(ctx, env={})
     assert ctx.cli_commands == ["axiom"]
 
 
 def test_the_setup_command_is_available_when_configured() -> None:
     ctx = FakeCtx()
-    hermess_metrics.register(ctx, env=FULL_ENV, runtime_factory=_FakeRuntime)
+    hermes_metrics.register(ctx, env=FULL_ENV, runtime_factory=_FakeRuntime)
     assert ctx.cli_commands == ["axiom"]
 
 
 def test_the_command_is_registered_however_registration_ends() -> None:
     """Whatever else fails, `hermes axiom` has to exist."""
-    from hermess_metrics import transport
+    from hermes_metrics import transport
 
     cases = [
         ({}, _FakeRuntime),
@@ -143,6 +143,6 @@ def test_the_command_is_registered_however_registration_ends() -> None:
     ]
     for env, factory in cases:
         ctx = FakeCtx()
-        hermess_metrics.register(ctx, env=env, runtime_factory=factory)
+        hermes_metrics.register(ctx, env=env, runtime_factory=factory)
         assert ctx.cli_commands == ["axiom"], (env, factory)
     assert transport is not None

@@ -39,7 +39,7 @@ class HealthMetrics:
         def observe(options: CallbackOptions) -> Iterable[Observation]:
             return [Observation(getattr(self._dispatcher.stats(), field))]
 
-        observe.__name__ = f"hermess_metrics_{field}"
+        observe.__name__ = f"hermes_metrics_{field}"
         return observe
 
     def _depth_callback(self, options: CallbackOptions) -> Iterable[Observation]:

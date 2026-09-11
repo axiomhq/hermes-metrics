@@ -1,6 +1,6 @@
-name: hermess-metrics
+name: hermes-metrics
 version: "0.1.0"
-description: "Ships Hermes agent-loop telemetry to Axiom as OpenTelemetry traces, metrics, and logs. Opt in with `hermes plugins enable hermess-metrics`; HERMES_AXIOM_* env vars select the deployment and datasets."
+description: "Ships Hermes agent-loop telemetry to Axiom as OpenTelemetry traces, metrics, and logs. Opt in with `hermes plugins enable hermes-metrics`; HERMES_AXIOM_* env vars select the deployment and datasets."
 author: Heinz Gies
 kind: standalone
 requires_env:
