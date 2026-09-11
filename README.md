@@ -5,12 +5,6 @@ Ships [Hermes](https://hermes-agent.nousresearch.com) agent telemetry to
 model, token burn, tool and provider failures, and whether the agent is stuck in
 a loop.
 
-## Alerts
-
-![Alerts](docs/alerts.png)
-
-## Dashboard
-
 ![Dashboard](docs/dashboard.png)
 
 ## Quickstart
@@ -36,6 +30,8 @@ Along the way it asks for the alert thresholds that depend on your workload,
 each with a default you can accept by pressing enter. Every threshold can also
 be changed later in the Axiom console, or with `hermes axiom alerts`.
 
+![Alerts](docs/alerts.png)
+
 ## What you get
 
 **Metrics.** Spend in dollars charged from published rates at call time, tokens
@@ -56,31 +52,52 @@ feed rather than a duplicate of the traces.
 Settings live in `~/.hermes/.env`, which Hermes loads at startup. `hermes axiom
 setup` writes them for you; set them by hand only if you want to.
 
-| Variable                             | Purpose                                       |
-| ------------------------------------ | --------------------------------------------- |
-| HERMES_AXIOM_TOKEN                   | Axiom API token with ingest rights            |
-| HERMES_AXIOM_DOMAIN                  | Deployment host, default `api.axiom.co`       |
-| HERMES_AXIOM_TRACES_DATASET          | Dataset receiving traces                      |
-| HERMES_AXIOM_LOGS_DATASET            | Dataset receiving logs                        |
-| HERMES_AXIOM_METRICS_DATASET         | Dataset receiving metrics                     |
-| HERMES_AXIOM_REDACTION               | `metadata`, `tools` or `full`, default first  |
-| HERMES_AXIOM_SERVICE_NAME            | Service name on every signal, default `hermes` |
-| HERMES_AXIOM_METRIC_INTERVAL_SECONDS | Export cadence, default 30                    |
-| HERMES_AXIOM_QUEUE_CAPACITY          | Events buffered before dropping, default 2048 |
-| HERMES_AXIOM_MAX_CHARS               | Cap on any captured string, default 12000     |
-| HERMES_AXIOM_CONTAINER_STATS         | Sample Docker sandboxes, default off          |
-| HERMES_AXIOM_DEBUG                   | Verbose plugin logging                        |
+| Variable                             | Purpose                            | Default        |
+| ------------------------------------ | ---------------------------------- | -------------- |
+| HERMES_AXIOM_TOKEN                   | Axiom API token with ingest rights | required       |
+| HERMES_AXIOM_DOMAIN                  | Deployment host                    | `api.axiom.co` |
+| HERMES_AXIOM_TRACES_DATASET          | Dataset receiving traces           | unset          |
+| HERMES_AXIOM_LOGS_DATASET            | Dataset receiving logs             | unset          |
+| HERMES_AXIOM_METRICS_DATASET         | Dataset receiving metrics          | unset          |
+| HERMES_AXIOM_REDACTION               | `metadata` only, `tools` or `full` | `metadata`     |
+| HERMES_AXIOM_SERVICE_NAME            | Service name on every signal       | `hermes`       |
+| HERMES_AXIOM_METRIC_INTERVAL_SECONDS | Export cadence in seconds          | 30             |
+| HERMES_AXIOM_QUEUE_CAPACITY          | Events buffered before dropping    | 2048           |
+| HERMES_AXIOM_MAX_CHARS               | Cap on any captured string         | 12000          |
+| HERMES_AXIOM_CONTAINER_STATS         | Sample Docker sandboxes            | off            |
+| HERMES_AXIOM_DEBUG                   | Verbose plugin logging             | off            |
 
 One signal is enough; set only the datasets you want.
 
 ### Redaction
 
-Hermes hook payloads carry prompts, conversation history, tool arguments and
-tool results, and may contain secrets. `metadata` ships identifiers, models,
-token counts, durations and error classes, and no content. `tools` adds tool
-arguments and results. `full` adds prompts and model output. Credentials are
-masked and strings are capped at every level, so raising the level widens what
-you can see without widening what leaks.
+`HERMES_AXIOM_REDACTION` decides how much captured content leaves the machine.
+The three levels are cumulative, and the default is the most private one.
+
+| Level      | What it adds                                                 |
+| ---------- | ------------------------------------------------------------ |
+| `metadata` | Identifiers, models, token counts, durations, error classes. |
+| `tools`    | Tool call arguments, tool results, tool error messages.      |
+| `full`     | Model output and provider error text.                        |
+
+Prompts and conversation history are never shipped, at any level.
+
+Error text is the exception, and the level does not gate it. Provider errors and
+tool error messages are attached to the failing trace span as its status
+description at every level, `metadata` included, and the character cap does not
+reach them. The logs dataset gates both fields by level; traces does not.
+
+Four protections apply to the content the levels gate. Keys that name a
+credential are replaced with `[redacted]`, strings are capped at
+`HERMES_AXIOM_MAX_CHARS`, nesting deeper than eight levels is dropped, and
+collections are truncated to their first 200 entries.
+
+Credential masking matches on the key name, never the value. A secret that
+arrives inside a tool result or a model message is not detected, so treat
+`tools` and `full` as able to carry anything the agent saw.
+
+An unrecognised value falls back to `metadata`, so a typo cannot widen what
+ships.
 
 ## How it behaves
 
