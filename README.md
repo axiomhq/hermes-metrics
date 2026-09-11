@@ -2,8 +2,7 @@
 
 Ships [Hermes](https://hermes-agent.nousresearch.com) agent telemetry to
 [Axiom](https://axiom.co) as OpenTelemetry traces, metrics and logs. Spend per
-model, token burn, tool and provider failures, and whether the agent is stuck in
-a loop.
+model, token burn, tool and provider failures, and subagent fan-out.
 
 ![Dashboard](docs/dashboard.png)
 
